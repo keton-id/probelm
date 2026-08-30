@@ -56,18 +56,31 @@ mtest test --cap reasoning
 mtest test --all --cap vision
 ```
 
-### 3. Pengurutan Hasil (*Sorting*)
+### 3. Pengurutan Hasil (*Multi-Key Sorting*)
+Mendukung pengurutan multi-kriteria (bisa digabung dengan koma `,`) serta modifier `:asc` / `:desc`:
+
+| Kunci Sort | Keterangan | Default Arah |
+| :--- | :--- | :--- |
+| `ctx` / `context` | Jumlah context window | Descending (terbesar dulu) |
+| `speed` / `rate` | Kecepatan generasi (TOK/s) | Descending (tercepat dulu) |
+| `ttft` / `latency` | *Time-to-first-token* | Ascending (latensi terendah dulu) |
+| `out` / `max_out` | Batas maksimum output token | Descending (terbesar dulu) |
+| `ping` / `status` | Status ketersediaan | OK dulu |
+| `name` / `model` | Nama model (A-Z) | Ascending |
+
 ```bash
-# Urutkan berdasarkan kecepatan generasi (TOK/s tertinggi)
-mtest test --all --sort speed
+# Urutkan berdasarkan Context Window terbesar (misal: 1m -> 400k -> 200k)
+mtest test --all --sort ctx
 
-# Urutkan berdasarkan latensi respons terendah (TTFT tercepat)
-mtest test --all --sort ttft
+# Multi-criteria sort: urutkan berdasarkan Context Window lalu Kecepatan (TOK/s)
+mtest test --all --sort ctx,speed
 
-# Urutkan secara alfabetis berdasarkan nama model
-mtest test --all --sort name
+# Urutkan berdasarkan TTFT tercepat lalu TOK/s
+mtest test --all --sort ttft,speed
+
+# Override arah pengurutan dengan modifier :asc atau :desc
+mtest test --all --sort ctx:asc
 ```
-
 ### 4. Custom Prompt & Stress Testing Paralel
 ```bash
 # Menguji model dengan prompt kustom dari terminal

@@ -87,7 +87,7 @@ struct ListArgs {
 #[derive(clap::Args, Debug, Clone)]
 struct TestArgs {
     /// Model IDs to test (positional or via --model, e.g. midas/glm-5.2)
-    #[arg(value_name = "MODEL")]
+    #[arg(value_name = "MODEL", value_delimiter = ',')]
     positional_models: Vec<String>,
     /// JSON config file
     #[arg(short, long, default_value = "config.json")]
@@ -110,9 +110,11 @@ struct TestArgs {
     /// Custom test prompt string
     #[arg(short = 'p', long = "prompt")]
     prompt: Option<String>,
-    /// Sort results by: 'speed' (tok/s), 'ttft' (latency), 'name' (model id)
-    #[arg(short = 's', long = "sort", value_parser = ["speed", "ttft", "name"])]
-    sort: Option<String>,
+    /// Sort results by one or more keys (comma-separated):
+    /// 'ctx' (context window), 'speed' (tok/s), 'ttft' (latency), 'out' (max output), 'name', 'ping'
+    /// Append :asc or :desc to override direction (e.g. --sort ctx,speed or -s ctx:desc,ttft:asc)
+    #[arg(short = 's', long = "sort", value_delimiter = ',')]
+    sort: Vec<String>,
     /// Run only ping availability check
     #[arg(long)]
     ping: bool,
@@ -597,28 +599,17 @@ async fn cmd_test(args: &TestArgs) -> i32 {
         }
     }
 
-    // Sort results if requested
-    if let Some(sort_by) = &args.sort {
-        match sort_by.as_str() {
-            "speed" => {
-                results.sort_by(|a, b| {
-                    let rate_a = a.latency.as_ref().and_then(|l| l.rate_per_sec).unwrap_or(0.0);
-                    let rate_b = b.latency.as_ref().and_then(|l| l.rate_per_sec).unwrap_or(0.0);
-                    rate_b.partial_cmp(&rate_a).unwrap_or(std::cmp::Ordering::Equal)
-                });
+    // Multi-key sorting if requested
+    if !args.sort.is_empty() {
+        results.sort_by(|a, b| {
+            for key in &args.sort {
+                let cmp = compare_probe_result(a, b, key);
+                if cmp != std::cmp::Ordering::Equal {
+                    return cmp;
+                }
             }
-            "ttft" => {
-                results.sort_by(|a, b| {
-                    let ttft_a = a.latency.as_ref().and_then(|l| l.ttft_secs).unwrap_or(f64::MAX);
-                    let ttft_b = b.latency.as_ref().and_then(|l| l.ttft_secs).unwrap_or(f64::MAX);
-                    ttft_a.partial_cmp(&ttft_b).unwrap_or(std::cmp::Ordering::Equal)
-                });
-            }
-            "name" => {
-                results.sort_by(|a, b| a.model.cmp(&b.model));
-            }
-            _ => {}
-        }
+            std::cmp::Ordering::Equal
+        });
     }
 
     if args.json {
@@ -637,6 +628,61 @@ async fn cmd_test(args: &TestArgs) -> i32 {
         1
     } else {
         0
+    }
+}
+fn compare_probe_result(a: &probe::ProbeResult, b: &probe::ProbeResult, key: &str) -> std::cmp::Ordering {
+    let key_lower = key.to_lowercase();
+    let (field, is_desc) = if let Some(stripped) = key_lower.strip_suffix(":asc") {
+        (stripped, false)
+    } else if let Some(stripped) = key_lower.strip_suffix(":desc") {
+        (stripped, true)
+    } else {
+        match key_lower.as_str() {
+            "ctx" | "context" | "context_window" | "out" | "max_out" | "output" | "speed" | "rate" | "toks"
+            | "tps" => (key_lower.as_str(), true),
+            _ => (key_lower.as_str(), false),
+        }
+    };
+
+    let ord = match field {
+        "ctx" | "context" | "context_window" => {
+            let ctx_a = a.caps.as_ref().and_then(|c| c.contextWindow).unwrap_or(0);
+            let ctx_b = b.caps.as_ref().and_then(|c| c.contextWindow).unwrap_or(0);
+            ctx_a.cmp(&ctx_b)
+        }
+        "out" | "max_out" | "output" => {
+            let out_a = a.caps.as_ref().and_then(|c| c.maxOutput).unwrap_or(0);
+            let out_b = b.caps.as_ref().and_then(|c| c.maxOutput).unwrap_or(0);
+            out_a.cmp(&out_b)
+        }
+        "speed" | "rate" | "toks" | "tps" => {
+            let rate_a = a.latency.as_ref().and_then(|l| l.rate_per_sec).unwrap_or(0.0);
+            let rate_b = b.latency.as_ref().and_then(|l| l.rate_per_sec).unwrap_or(0.0);
+            rate_a.partial_cmp(&rate_b).unwrap_or(std::cmp::Ordering::Equal)
+        }
+        "ttft" | "latency" | "first" => {
+            let ttft_a = a.latency.as_ref().and_then(|l| l.ttft_secs).unwrap_or(f64::MAX);
+            let ttft_b = b.latency.as_ref().and_then(|l| l.ttft_secs).unwrap_or(f64::MAX);
+            ttft_a.partial_cmp(&ttft_b).unwrap_or(std::cmp::Ordering::Equal)
+        }
+        "total" | "time" => {
+            let tot_a = a.latency.as_ref().and_then(|l| l.total_secs).unwrap_or(f64::MAX);
+            let tot_b = b.latency.as_ref().and_then(|l| l.total_secs).unwrap_or(f64::MAX);
+            tot_a.partial_cmp(&tot_b).unwrap_or(std::cmp::Ordering::Equal)
+        }
+        "ping" | "status" | "ok" => {
+            let ok_a = a.ping.as_ref().map_or(false, |p| p.ok);
+            let ok_b = b.ping.as_ref().map_or(false, |p| p.ok);
+            ok_a.cmp(&ok_b)
+        }
+        "name" | "model" | "id" => a.model.cmp(&b.model),
+        _ => std::cmp::Ordering::Equal,
+    };
+
+    if is_desc {
+        ord.reverse()
+    } else {
+        ord
     }
 }
 
