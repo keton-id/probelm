@@ -11,6 +11,7 @@ pub struct ModelEntry {
     #[serde(default)]
     pub capabilities: Capabilities,
 }
+
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[allow(non_snake_case)]
 pub struct Capabilities {
@@ -93,6 +94,7 @@ impl Capabilities {
             list.join(" ")
         }
     }
+
     /// Compact single-line representation used in the table.
     #[allow(dead_code)]
     pub fn compact(&self) -> String {
@@ -130,7 +132,11 @@ pub struct ModelsResponse {
 }
 
 /// Fetch all models from the gateway.
-pub async fn fetch_models(base_url: &str, api_key: &str, timeout: u64) -> Result<Vec<ModelEntry>, String> {
+pub async fn fetch_models(
+    base_url: &str,
+    api_key: &str,
+    timeout: u64,
+) -> Result<Vec<ModelEntry>, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(timeout))
         .build()
@@ -151,7 +157,11 @@ pub async fn fetch_models(base_url: &str, api_key: &str, timeout: u64) -> Result
     let text = resp.text().await.map_err(|e| format!("read body: {e}"))?;
     let parsed: ModelsResponse =
         serde_json::from_str(&text).map_err(|e| format!("parse models: {e}"))?;
-    Ok(parsed.data)
+    let mut data = parsed.data;
+    for m in &mut data {
+        m.capabilities = crate::specs::enrich_capabilities(&m.id, m.capabilities.clone());
+    }
+    Ok(data)
 }
 
 /// Pretty JSON for the `--list-models` export (mirrors the bash tool's format).

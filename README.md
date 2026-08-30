@@ -119,6 +119,13 @@ mtest list --owned-by midas
 # Ekspor katalog model ke file JSON
 mtest list --prefix midas --list-models midas-models.json
 ```
+### 7. Sinkronisasi Spesifikasi Model Resmi (`sync-specs`)
+Mengunduh database spesifikasi resmi 2,800+ model dari LiteLLM / Source of Truth global untuk mengoreksi metadata gateway lokal yang salah/kurang update:
+
+```bash
+# Sinkronkan database spesifikasi model terbaru
+mtest sync-specs
+```
 
 ---
 
@@ -128,9 +135,9 @@ mtest list --prefix midas --list-models midas-models.json
 ```text
 MODEL                                PING   TTFT(s) TOTAL(s)   TOK/s  CAPS            CTX    OUT
 -----------------------------------------------------------------------------------------------
-midas/deepseek-v4-pro                OK       0.101    0.106    12.5  🧠 🛠            1m   384k
-midas/glm-5.2                        OK       1.731    1.838    16.9  🧠 🛠          200k   128k
-cx/gpt-5.6-sol                       OK       0.842    0.855    21.4  🧠 👁 🛠 🔍    372k   128k
+midas/glm-5.2                        OK       1.481    1.614    19.2  🧠 🛠            1m   131k
+midas/deepseek-v4-pro                OK       0.101    0.106    12.5  🧠 🛠            1m   393k
+cx/gpt-5.6-sol                       OK       0.842    0.855    21.4  🧠 👁 🛠 🔍    922k   128k
 -----------------------------------------------------------------------------------------------
 Legend: 🧠 Reasoning  👁 Vision  🛠 Tools  📄 PDF  🔍 Search  🎙 Audio  🎬 Video  🎨 Image
 ```
@@ -138,10 +145,8 @@ Legend: 🧠 Reasoning  👁 Vision  🛠 Tools  📄 PDF  🔍 Search  🎙 Aud
 ### Format Markdown Table (`--md`):
 | Model | Ping | TTFT (s) | Total (s) | Tok/s | Caps | Context | Max Out |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| `midas/glm-5.2` | OK | 1.731 | 1.838 | 16.9 | 🧠 🛠 | 200k | 128k |
-| `midas/deepseek-v4-pro` | OK | 0.101 | 0.106 | 12.5 | 🧠 🛠 | 1m | 384k |
-
----
+| `midas/glm-5.2` | OK | 1.481 | 1.614 | 19.2 | 🧠 🛠 | 1m | 131k |
+| `midas/deepseek-v4-pro` | OK | 0.101 | 0.106 | 12.5 | 🧠 🛠 | 1m | 393k |
 
 ## ⚙️ Konfigurasi
 

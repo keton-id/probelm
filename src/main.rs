@@ -1,7 +1,7 @@
 mod config;
 mod models;
 mod probe;
-
+mod specs;
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -35,6 +35,9 @@ enum Command {
     /// Test & benchmark selected models (ping/latency/throughput/caps).
     #[command(alias = "probe", alias = "check", alias = "bench", alias = "run")]
     Test(TestArgs),
+    /// Sync authoritative model specifications database from LiteLLM / Community source.
+    #[command(alias = "sync")]
+    SyncSpecs,
 }
 
 #[derive(clap::Args, Debug)]
@@ -142,13 +145,28 @@ async fn main() {
         Some(Command::Init(a)) => cmd_init(a).await,
         Some(Command::List(a)) => cmd_list(a).await,
         Some(Command::Test(a)) => cmd_test(a).await,
+        Some(Command::SyncSpecs) => cmd_sync_specs().await,
         None => {
-            eprintln!("usage: mtest <init|test|list> [options] — see --help");
+            eprintln!("usage: mtest <init|test|list|sync-specs> [options] — see --help");
             eprintln!("aliases for 'test': probe, check, bench, run");
             2
         }
     };
     std::process::exit(code);
+}
+
+async fn cmd_sync_specs() -> i32 {
+    println!("==> Syncing model specifications from LiteLLM authoritative database...");
+    match specs::sync_remote_specs().await {
+        Ok(count) => {
+            println!("✓ Successfully synced {count} model specifications to ~/.config/probelm/specs-cache.json");
+            0
+        }
+        Err(e) => {
+            eprintln!("ERROR: Failed to sync specs: {e}");
+            2
+        }
+    }
 }
 
 fn prompt_line(prompt: &str, default: Option<&str>) -> String {
