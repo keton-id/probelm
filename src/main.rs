@@ -9,7 +9,16 @@ use std::sync::Arc;
 
 use clap::{Parser, Subcommand};
 
-/// Probe/test models on a 9Router gateway: ping, latency, caps.
+// ANSI Color constants
+const COLOR_RESET: &str = "\x1b[0m";
+const COLOR_BOLD: &str = "\x1b[1m";
+const COLOR_DIM: &str = "\x1b[2m";
+const COLOR_GREEN: &str = "\x1b[32m";
+const COLOR_RED: &str = "\x1b[31m";
+const COLOR_CYAN: &str = "\x1b[36m";
+const COLOR_YELLOW: &str = "\x1b[33m";
+
+/// Probe and benchmark models on a 9Router gateway: ping, latency, throughput, caps.
 #[derive(Parser)]
 #[command(name = "mtest", version, about, subcommand_negates_reqs = true)]
 struct Cli {
@@ -23,8 +32,9 @@ enum Command {
     Init(InitArgs),
     /// Discover models on the gateway.
     List(ListArgs),
-    /// Probe selected models (ping/latency/caps).
-    Probe(ProbeArgs),
+    /// Test & benchmark selected models (ping/latency/throughput/caps).
+    #[command(alias = "probe", alias = "check", alias = "bench", alias = "run")]
+    Test(TestArgs),
 }
 
 #[derive(clap::Args, Debug)]
@@ -58,12 +68,12 @@ struct InitArgs {
 #[derive(clap::Args)]
 struct ListArgs {
     /// JSON config file (optional; uses discovery otherwise)
-    #[arg(long, default_value = "config.json")]
+    #[arg(short, long, default_value = "config.json")]
     config: String,
-    /// Filter by owned_by (e.g. midas, combo)
+    /// Filter by owned_by (e.g. midas, combo, cx)
     #[arg(long)]
     owned_by: Option<String>,
-    /// Filter by id prefix (e.g. midas)
+    /// Filter by id prefix (e.g. midas, cx)
     #[arg(long)]
     prefix: Option<String>,
     /// Output JSON instead of a table
@@ -74,16 +84,19 @@ struct ListArgs {
     list_models: Option<Option<String>>,
 }
 
-#[derive(clap::Args)]
-struct ProbeArgs {
+#[derive(clap::Args, Debug, Clone)]
+struct TestArgs {
+    /// Model IDs to test (positional or via --model, e.g. midas/glm-5.2)
+    #[arg(value_name = "MODEL")]
+    positional_models: Vec<String>,
     /// JSON config file
-    #[arg(long, default_value = "config.json")]
+    #[arg(short, long, default_value = "config.json")]
     config: String,
-    /// Probe all models discovered on the gateway (ignores config list)
+    /// Test ALL models discovered on the gateway (ignores config list)
     #[arg(short = 'a', long = "all")]
     all: bool,
-    /// Only probe matching model ids (repeatable / comma-separated)
-    #[arg(long = "model", value_delimiter = ',')]
+    /// Explicit model IDs to test (comma-separated or repeatable)
+    #[arg(short = 'm', long = "model", value_delimiter = ',')]
     models: Vec<String>,
     /// Filter by owned_by (e.g. midas, cx, combo)
     #[arg(long)]
@@ -91,22 +104,32 @@ struct ProbeArgs {
     /// Filter by id prefix (e.g. midas, cx)
     #[arg(long)]
     prefix: Option<String>,
-    /// Only probe models having this capability (e.g. vision, reasoning)
+    /// Only test models having this capability (e.g. vision, reasoning)
     #[arg(long = "cap", value_delimiter = ',')]
     caps: Vec<String>,
+    /// Custom test prompt string
+    #[arg(short = 'p', long = "prompt")]
+    prompt: Option<String>,
+    /// Sort results by: 'speed' (tok/s), 'ttft' (latency), 'name' (model id)
+    #[arg(short = 's', long = "sort", value_parser = ["speed", "ttft", "name"])]
+    sort: Option<String>,
+    /// Run only ping availability check
     #[arg(long)]
     ping: bool,
-    /// Run only latency
+    /// Run only latency & throughput test
     #[arg(long)]
     latency: bool,
-    /// Run only caps
+    /// Run only capability inspection
     #[arg(long)]
     caps_only: bool,
     /// Output JSON instead of a table
     #[arg(long)]
     json: bool,
-    /// Run models concurrently (default 1)
-    #[arg(long, default_value_t = 1)]
+    /// Output Markdown table format (ready for PR/issue)
+    #[arg(long = "md", alias = "markdown")]
+    markdown: bool,
+    /// Number of concurrent test workers (default 1)
+    #[arg(short = 'j', long = "jobs", default_value_t = 1)]
     jobs: usize,
 }
 
@@ -116,9 +139,10 @@ async fn main() {
     let code = match &cli.command {
         Some(Command::Init(a)) => cmd_init(a).await,
         Some(Command::List(a)) => cmd_list(a).await,
-        Some(Command::Probe(a)) => cmd_probe(a).await,
+        Some(Command::Test(a)) => cmd_test(a).await,
         None => {
-            eprintln!("usage: mtest <init|list|probe> [options] — see --help");
+            eprintln!("usage: mtest <init|test|list> [options] — see --help");
+            eprintln!("aliases for 'test': probe, check, bench, run");
             2
         }
     };
@@ -184,8 +208,7 @@ async fn cmd_init(args: &InitArgs) -> i32 {
         if let Some(ref dk) = detected_key {
             let masked = mask_key(dk);
             let prompt_text = format!("? 9Router API Key (detected: {masked})");
-            let input = prompt_line(&prompt_text, Some(dk));
-            input
+            prompt_line(&prompt_text, Some(dk))
         } else {
             let input = prompt_line("? 9Router API Key (e.g. sk-...)", None);
             if input.is_empty() {
@@ -272,7 +295,6 @@ async fn cmd_init(args: &InitArgs) -> i32 {
                     .map(|m| m.id.clone())
                     .collect()
             } else {
-                // Default: filter by midas if available, else all
                 let midas_models: Vec<String> = entries
                     .iter()
                     .filter(|m| m.id.starts_with("midas/"))
@@ -374,8 +396,8 @@ async fn cmd_init(args: &InitArgs) -> i32 {
     println!();
     println!("Quickstart commands:");
     println!("  mtest list                 # Discover models on the gateway");
-    println!("  mtest probe                # Probe configured models");
-    println!("  mtest probe --model <name> # Probe specific model");
+    println!("  mtest test                 # Test configured models");
+    println!("  mtest test <model_name>    # Test specific model directly");
 
     0
 }
@@ -393,7 +415,6 @@ async fn cmd_list(args: &ListArgs) -> i32 {
         }
     };
 
-    // --list-models short-circuits to writing a JSON file
     if let Some(f) = &args.list_models {
         let path = f.clone().unwrap_or_else(|| "models.json".to_string());
         let json = models::export_json(&entries, &cfg.base_url);
@@ -408,7 +429,7 @@ async fn cmd_list(args: &ListArgs) -> i32 {
     let filtered: Vec<_> = entries
         .iter()
         .filter(|m| args.owned_by.as_deref().map_or(true, |o| m.owned_by.as_deref() == Some(o)))
-        .filter(|m| args.prefix.as_deref().map_or(true, |p| m.id.starts_with(&format!("{p}/"))))
+        .filter(|m| args.prefix.as_deref().map_or(true, |p| m.id.starts_with(&format!("{p}/")) || m.id == *p))
         .collect();
 
     if args.json {
@@ -431,7 +452,7 @@ async fn cmd_list(args: &ListArgs) -> i32 {
     0
 }
 
-async fn cmd_probe(args: &ProbeArgs) -> i32 {
+async fn cmd_test(args: &TestArgs) -> i32 {
     let cfg = Arc::new(config::Config::load(&args.config).unwrap_or_else(|e| {
         eprintln!("ERROR: {e}");
         std::process::exit(2);
@@ -451,11 +472,15 @@ async fn cmd_probe(args: &ProbeArgs) -> i32 {
         .collect();
 
     // Resolve target models:
-    // 1. Explicit --model list
+    // 1. Positional or explicit --model list
     // 2. If --all, --prefix, or --owned-by passed: start from all discovered gateway models
     // 3. If config.models has items: use config.models
     // 4. Otherwise: use all discovered gateway models
-    let mut targets: Vec<String> = if !args.models.is_empty() {
+    let mut targets: Vec<String> = if !args.positional_models.is_empty() {
+        let mut combined = args.positional_models.clone();
+        combined.extend(args.models.clone());
+        combined
+    } else if !args.models.is_empty() {
         args.models.clone()
     } else if args.all || args.prefix.is_some() || args.owned_by.is_some() || cfg.models.is_empty() {
         entries.iter().map(|m| m.id.clone()).collect()
@@ -489,7 +514,7 @@ async fn cmd_probe(args: &ProbeArgs) -> i32 {
             .collect();
     }
     if targets.is_empty() {
-        eprintln!("ERROR: no models matched");
+        eprintln!("ERROR: no models matched the specified criteria");
         return 2;
     }
 
@@ -499,6 +524,7 @@ async fn cmd_probe(args: &ProbeArgs) -> i32 {
 
     let targets = Arc::new(targets);
     let cfg2 = Arc::clone(&cfg);
+    let custom_prompt = args.prompt.clone();
     let opts = probe::ProbeOpts {
         base_url: cfg.base_url.clone(),
         api_key: cfg.api_key.clone(),
@@ -514,7 +540,10 @@ async fn cmd_probe(args: &ProbeArgs) -> i32 {
     let results: Vec<probe::ProbeResult> = if args.jobs <= 1 {
         let mut v = Vec::new();
         for m in targets.iter() {
-            let prompt = cfg2.prompts.get(m).cloned().unwrap_or_else(|| cfg2.default_prompt.clone());
+            let prompt = custom_prompt
+                .clone()
+                .or_else(|| cfg2.prompts.get(m).cloned())
+                .unwrap_or_else(|| cfg2.default_prompt.clone());
             let mut o = opts.clone();
             o.prompt = prompt;
             match probe::probe_one(m, &o).await {
@@ -536,7 +565,11 @@ async fn cmd_probe(args: &ProbeArgs) -> i32 {
             let m = m.clone();
             let cfg2 = Arc::clone(&cfg2);
             let mut o = opts.clone();
-            o.prompt = cfg2.prompts.get(&m).cloned().unwrap_or_else(|| cfg2.default_prompt.clone());
+            let prompt = custom_prompt
+                .clone()
+                .or_else(|| cfg2.prompts.get(&m).cloned())
+                .unwrap_or_else(|| cfg2.default_prompt.clone());
+            o.prompt = prompt;
             let sem = Arc::clone(&semaphore);
             handles.push(tokio::spawn(async move {
                 let _p = sem.acquire().await.unwrap();
@@ -564,11 +597,37 @@ async fn cmd_probe(args: &ProbeArgs) -> i32 {
         }
     }
 
+    // Sort results if requested
+    if let Some(sort_by) = &args.sort {
+        match sort_by.as_str() {
+            "speed" => {
+                results.sort_by(|a, b| {
+                    let rate_a = a.latency.as_ref().and_then(|l| l.rate_per_sec).unwrap_or(0.0);
+                    let rate_b = b.latency.as_ref().and_then(|l| l.rate_per_sec).unwrap_or(0.0);
+                    rate_b.partial_cmp(&rate_a).unwrap_or(std::cmp::Ordering::Equal)
+                });
+            }
+            "ttft" => {
+                results.sort_by(|a, b| {
+                    let ttft_a = a.latency.as_ref().and_then(|l| l.ttft_secs).unwrap_or(f64::MAX);
+                    let ttft_b = b.latency.as_ref().and_then(|l| l.ttft_secs).unwrap_or(f64::MAX);
+                    ttft_a.partial_cmp(&ttft_b).unwrap_or(std::cmp::Ordering::Equal)
+                });
+            }
+            "name" => {
+                results.sort_by(|a, b| a.model.cmp(&b.model));
+            }
+            _ => {}
+        }
+    }
+
     if args.json {
         println!(
             "{}",
             serde_json::to_string_pretty(&serde_json::json!({ "probes": results })).unwrap()
         );
+    } else if args.markdown {
+        print_markdown_table(&results, do_caps);
     } else {
         print_table(&results, do_ping, do_latency, do_caps);
     }
@@ -609,42 +668,59 @@ fn pad_visual(s: &str, target_width: usize) -> String {
 fn print_table(results: &[probe::ProbeResult], _do_ping: bool, _do_latency: bool, do_caps: bool) {
     if do_caps {
         println!(
-            "{:<36} {:<5} {:>8} {:>8} {:>7}  {:<12} {:>6} {:>6}",
-            "MODEL", "PING", "TTFT(s)", "TOTAL(s)", "TOK/s", "CAPS", "CTX", "OUT"
+            "{}{:<36} {:<5} {:>8} {:>8} {:>7}  {:<12} {:>6} {:>6}{}",
+            COLOR_BOLD, "MODEL", "PING", "TTFT(s)", "TOTAL(s)", "TOK/s", "CAPS", "CTX", "OUT", COLOR_RESET
         );
-        println!("{}", "-".repeat(95));
+        println!("{}{}{}", COLOR_DIM, "-".repeat(95), COLOR_RESET);
     } else {
         println!(
-            "{:<36} {:<5} {:>8} {:>8} {:>7}",
-            "MODEL", "PING", "TTFT(s)", "TOTAL(s)", "TOK/s"
+            "{}{:<36} {:<5} {:>8} {:>8} {:>7}{}",
+            COLOR_BOLD, "MODEL", "PING", "TTFT(s)", "TOTAL(s)", "TOK/s", COLOR_RESET
         );
-        println!("{}", "-".repeat(70));
+        println!("{}{}{}", COLOR_DIM, "-".repeat(70), COLOR_RESET);
     }
 
     for r in results {
-        let ping = match &r.ping {
-            Some(p) if p.ok => "OK".to_string(),
-            Some(_) => "FAIL".to_string(),
-            None => "-".to_string(),
+        let ping_display = match &r.ping {
+            Some(p) if p.ok => format!("{COLOR_GREEN}OK  {COLOR_RESET}"),
+            Some(_) => format!("{COLOR_RED}FAIL{COLOR_RESET}"),
+            None => format!("{COLOR_DIM}-   {COLOR_RESET}"),
         };
+
         let ttft = r
             .latency
             .as_ref()
             .and_then(|l| l.ttft_secs)
-            .map(|v| format!("{v:.3}"))
-            .unwrap_or_else(|| "-".into());
+            .map(|v| {
+                if v < 0.5 {
+                    format!("{COLOR_CYAN}{v:6.3}{COLOR_RESET}")
+                } else if v > 2.5 {
+                    format!("{COLOR_YELLOW}{v:6.3}{COLOR_RESET}")
+                } else {
+                    format!("{v:6.3}")
+                }
+            })
+            .unwrap_or_else(|| format!("{COLOR_DIM}     -{COLOR_RESET}"));
+
         let total = r
             .latency
             .as_ref()
             .and_then(|l| l.total_secs)
-            .map(|v| format!("{v:.3}"))
-            .unwrap_or_else(|| "-".into());
+            .map(|v| format!("{v:6.3}"))
+            .unwrap_or_else(|| format!("{COLOR_DIM}     -{COLOR_RESET}"));
+
         let rate = r
             .latency
             .as_ref()
             .and_then(|l| l.rate_per_sec)
-            .map(|v| format!("{v:.1}"))
-            .unwrap_or_else(|| "-".into());
+            .map(|v| {
+                if v >= 20.0 {
+                    format!("{COLOR_GREEN}{v:5.1}{COLOR_RESET}")
+                } else {
+                    format!("{v:5.1}")
+                }
+            })
+            .unwrap_or_else(|| format!("{COLOR_DIM}    -{COLOR_RESET}"));
 
         if do_caps {
             let (icons, ctx, out) = if let Some(c) = &r.caps {
@@ -658,19 +734,63 @@ fn print_table(results: &[probe::ProbeResult], _do_ping: bool, _do_latency: bool
             };
             let padded_icons = pad_visual(&icons, 12);
             println!(
-                "{:<36} {:<5} {:>8} {:>8} {:>7}  {} {:>6} {:>6}",
-                r.model, ping, ttft, total, rate, padded_icons, ctx, out
+                "{:<36} {}   {}   {}   {}  {} {:>6} {:>6}",
+                r.model, ping_display, ttft, total, rate, padded_icons, ctx, out
             );
         } else {
             println!(
-                "{:<36} {:<5} {:>8} {:>8} {:>7}",
-                r.model, ping, ttft, total, rate
+                "{:<36} {}   {}   {}   {}",
+                r.model, ping_display, ttft, total, rate
             );
         }
     }
 
     if do_caps {
-        println!("{}", "-".repeat(95));
-        println!("Legend: 🧠 Reasoning  👁 Vision  🛠 Tools  📄 PDF  🔍 Search  🎙 Audio  🎬 Video  🎨 Image");
+        println!("{}{}{}", COLOR_DIM, "-".repeat(95), COLOR_RESET);
+        println!(
+            "{}Legend:{} 🧠 Reasoning  👁 Vision  🛠 Tools  📄 PDF  🔍 Search  🎙 Audio  🎬 Video  🎨 Image",
+            COLOR_DIM, COLOR_RESET
+        );
+    }
+}
+
+fn print_markdown_table(results: &[probe::ProbeResult], do_caps: bool) {
+    if do_caps {
+        println!("| Model | Ping | TTFT (s) | Total (s) | Tok/s | Caps | Context | Max Out |");
+        println!("| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |");
+        for r in results {
+            let ping = match &r.ping {
+                Some(p) if p.ok => "OK",
+                Some(_) => "FAIL",
+                None => "-",
+            };
+            let ttft = r.latency.as_ref().and_then(|l| l.ttft_secs).map(|v| format!("{v:.3}")).unwrap_or_else(|| "-".into());
+            let total = r.latency.as_ref().and_then(|l| l.total_secs).map(|v| format!("{v:.3}")).unwrap_or_else(|| "-".into());
+            let rate = r.latency.as_ref().and_then(|l| l.rate_per_sec).map(|v| format!("{v:.1}")).unwrap_or_else(|| "-".into());
+            let (icons, ctx, out) = if let Some(c) = &r.caps {
+                (
+                    c.icons(),
+                    models::Capabilities::format_tokens(c.contextWindow),
+                    models::Capabilities::format_tokens(c.maxOutput),
+                )
+            } else {
+                ("-".to_string(), "-".to_string(), "-".to_string())
+            };
+            println!("| `{}` | {} | {} | {} | {} | {} | {} | {} |", r.model, ping, ttft, total, rate, icons, ctx, out);
+        }
+    } else {
+        println!("| Model | Ping | TTFT (s) | Total (s) | Tok/s |");
+        println!("| :--- | :---: | :---: | :---: | :---: |");
+        for r in results {
+            let ping = match &r.ping {
+                Some(p) if p.ok => "OK",
+                Some(_) => "FAIL",
+                None => "-",
+            };
+            let ttft = r.latency.as_ref().and_then(|l| l.ttft_secs).map(|v| format!("{v:.3}")).unwrap_or_else(|| "-".into());
+            let total = r.latency.as_ref().and_then(|l| l.total_secs).map(|v| format!("{v:.3}")).unwrap_or_else(|| "-".into());
+            let rate = r.latency.as_ref().and_then(|l| l.rate_per_sec).map(|v| format!("{v:.1}")).unwrap_or_else(|| "-".into());
+            println!("| `{}` | {} | {} | {} | {} |", r.model, ping, ttft, total, rate);
+        }
     }
 }
