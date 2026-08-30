@@ -42,11 +42,16 @@ mtest test midas/glm-5.2 midas/deepseek-v4-pro
 mtest test --all
 ```
 
-### 2. Filter Berdasarkan Grup / Prefix & Kapabilitas
+### 2. Filter Berdasarkan Wildcard, Prefix & Kapabilitas
 ```bash
-# Uji semua model dengan prefix tertentu (misal 'cx/' atau 'midas/')
+# Pola Wildcard langsung di positional arguments (misal 'cx/*', 'ag/*', '*glm*')
+mtest test "cx/*"
+mtest test "cx/*" "ag/*"
+mtest test "*gpt-5.6*"
+
+# Uji prefix tertentu via flag --prefix (mendukung multi-prefix dipisah koma)
 mtest test --prefix cx
-mtest test --prefix midas
+mtest test --prefix cx,ag,midas
 
 # Uji model berdasarkan owner/grup (misal 'combo', 'midas', 'cx')
 mtest test --owned-by combo

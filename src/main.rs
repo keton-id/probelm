@@ -449,9 +449,17 @@ async fn cmd_list(args: &ListArgs) -> i32 {
     let filtered: Vec<_> = entries
         .iter()
         .filter(|m| args.owned_by.as_deref().map_or(true, |o| m.owned_by.as_deref() == Some(o)))
-        .filter(|m| args.prefix.as_deref().map_or(true, |p| m.id.starts_with(&format!("{p}/")) || m.id == *p))
+        .filter(|m| {
+            args.prefix.as_deref().map_or(true, |p| {
+                p.split(',').any(|prefix| {
+                    let prefix = prefix.trim();
+                    m.id.starts_with(&format!("{prefix}/"))
+                        || m.id == prefix
+                        || matches_pattern(prefix, &m.id)
+                })
+            })
+        })
         .collect();
-
     if args.json {
         let arr: Vec<_> = filtered
             .iter()
@@ -496,22 +504,63 @@ async fn cmd_test(args: &TestArgs) -> i32 {
     // 2. If --all, --prefix, or --owned-by passed: start from all discovered gateway models
     // 3. If config.models has items: use config.models
     // 4. Otherwise: use all discovered gateway models
-    let mut targets: Vec<String> = if !args.positional_models.is_empty() {
+    let all_discovered_ids: Vec<String> = entries.iter().map(|m| m.id.clone()).collect();
+
+    let raw_inputs: Vec<String> = if !args.positional_models.is_empty() {
         let mut combined = args.positional_models.clone();
         combined.extend(args.models.clone());
         combined
     } else if !args.models.is_empty() {
         args.models.clone()
     } else if args.all || args.prefix.is_some() || args.owned_by.is_some() || cfg.models.is_empty() {
-        entries.iter().map(|m| m.id.clone()).collect()
+        all_discovered_ids.clone()
     } else {
         cfg.models.clone()
     };
 
+    let mut targets: Vec<String> = Vec::new();
+    for input in &raw_inputs {
+        if input.contains('*') {
+            let matched: Vec<String> = all_discovered_ids
+                .iter()
+                .filter(|id| matches_pattern(input, id))
+                .cloned()
+                .collect();
+            if !matched.is_empty() {
+                targets.extend(matched);
+            } else {
+                eprintln!("WARN: No models matched pattern '{input}'");
+            }
+        } else if all_discovered_ids.contains(input) {
+            targets.push(input.clone());
+        } else {
+            let matched: Vec<String> = all_discovered_ids
+                .iter()
+                .filter(|id| id.starts_with(&format!("{input}/")) || id.as_str() == input.as_str())
+                .cloned()
+                .collect();
+            if !matched.is_empty() {
+                targets.extend(matched);
+            } else {
+                targets.push(input.clone());
+            }
+        }
+    }
+
+    let mut seen = std::collections::HashSet::new();
+    targets.retain(|item| seen.insert(item.clone()));
+
     if let Some(p) = &args.prefix {
+        let prefixes: Vec<&str> = p.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
         targets = targets
             .into_iter()
-            .filter(|m| m.starts_with(&format!("{p}/")) || m.starts_with(p))
+            .filter(|m| {
+                prefixes.iter().any(|prefix| {
+                    m.starts_with(&format!("{prefix}/"))
+                        || m.starts_with(prefix)
+                        || matches_pattern(prefix, m)
+                })
+            })
             .collect();
     }
     if let Some(o) = &args.owned_by {
@@ -648,6 +697,43 @@ async fn cmd_test(args: &TestArgs) -> i32 {
         0
     }
 }
+pub fn matches_pattern(pattern: &str, text: &str) -> bool {
+    let pattern = pattern.trim();
+    if pattern == text {
+        return true;
+    }
+    if !pattern.contains('*') {
+        return text == pattern || text.starts_with(&format!("{pattern}/"));
+    }
+    let parts: Vec<&str> = pattern.split('*').collect();
+    if parts.len() == 1 {
+        return text == parts[0];
+    }
+    let mut remainder = text;
+    for (i, &part) in parts.iter().enumerate() {
+        if part.is_empty() {
+            continue;
+        }
+        if i == 0 {
+            if !remainder.starts_with(part) {
+                return false;
+            }
+            remainder = &remainder[part.len()..];
+        } else if i == parts.len() - 1 {
+            if !remainder.ends_with(part) {
+                return false;
+            }
+        } else {
+            if let Some(idx) = remainder.find(part) {
+                remainder = &remainder[idx + part.len()..];
+            } else {
+                return false;
+            }
+        }
+    }
+    true
+}
+
 fn compare_probe_result(a: &probe::ProbeResult, b: &probe::ProbeResult, key: &str) -> std::cmp::Ordering {
     let key_lower = key.to_lowercase();
     let (field, is_desc) = if let Some(stripped) = key_lower.strip_suffix(":asc") {
