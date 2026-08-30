@@ -3,6 +3,7 @@ use serde_json::Value;
 
 /// One entry from `GET /v1/models`.
 #[derive(Debug, Clone, Deserialize)]
+#[allow(dead_code)]
 pub struct ModelEntry {
     pub id: String,
     pub object: Option<String>,
@@ -11,8 +12,8 @@ pub struct ModelEntry {
     pub capabilities: Capabilities,
 }
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[allow(non_snake_case)]
 pub struct Capabilities {
-    #[serde(default)]
     pub vision: bool,
     #[serde(default)]
     pub pdf: bool,
@@ -36,14 +37,69 @@ pub struct Capabilities {
 }
 
 impl Capabilities {
+    /// Format token counts to human-readable k/m notation (e.g. 200k, 1m).
+    pub fn format_tokens(n: Option<u64>) -> String {
+        match n {
+            None => "-".to_string(),
+            Some(0) => "-".to_string(),
+            Some(v) => {
+                if v >= 1_000_000 {
+                    let m = v as f64 / 1_000_000.0;
+                    if m.fract().abs() < 0.05 {
+                        format!("{:.0}m", m)
+                    } else {
+                        format!("{:.1}m", m)
+                    }
+                } else if v >= 1_000 {
+                    let k = (v as f64 / 1_000.0).round() as u64;
+                    format!("{k}k")
+                } else {
+                    format!("{v}")
+                }
+            }
+        }
+    }
+
+    /// Extract icons representing active capabilities.
+    pub fn icons(&self) -> String {
+        let mut list = Vec::new();
+        if self.reasoning {
+            list.push("🧠");
+        }
+        if self.vision {
+            list.push("👁");
+        }
+        if self.tools {
+            list.push("🛠");
+        }
+        if self.pdf {
+            list.push("📄");
+        }
+        if self.search {
+            list.push("🔍");
+        }
+        if self.audioInput || self.audioOutput {
+            list.push("🎙");
+        }
+        if self.videoInput {
+            list.push("🎬");
+        }
+        if self.imageOutput {
+            list.push("🎨");
+        }
+        if list.is_empty() {
+            "-".to_string()
+        } else {
+            list.join(" ")
+        }
+    }
     /// Compact single-line representation used in the table.
+    #[allow(dead_code)]
     pub fn compact(&self) -> String {
-        let mut parts = Vec::new();
-        parts.push(if self.vision { "vis" } else { "-" }.to_string());
-        parts.push(if self.reasoning { "rsn" } else { "-" }.to_string());
-        parts.push(format!("ctx={}", self.contextWindow.map(|v| v.to_string()).unwrap_or_else(|| "-".into())));
-        parts.push(format!("out={}", self.maxOutput.map(|v| v.to_string()).unwrap_or_else(|| "-".into())));
-        parts.join(" ")
+        let icons = self.icons();
+        let ctx = Self::format_tokens(self.contextWindow);
+        let out = Self::format_tokens(self.maxOutput);
+        format!("{icons} ctx:{ctx} out:{out}")
     }
 
     /// Capability names present (lowercase), for `--cap` filtering.
