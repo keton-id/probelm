@@ -102,6 +102,8 @@ async fn latency(host: &str, key: &str, opts: &ProbeOpts) -> Result<LatencyOutco
         .await
         .map_err(|e| format!("POST {url}: {e}"))?;
 
+    let connected = Instant::now();
+
     if !resp.status().is_success() {
         return Ok(LatencyOutcome {
             ttft_secs: None,
@@ -170,7 +172,7 @@ async fn latency(host: &str, key: &str, opts: &ProbeOpts) -> Result<LatencyOutco
                                 }
 
                                 if text_found && ttft.is_none() {
-                                    ttft = Some(started.elapsed().as_secs_f64());
+                                    ttft = Some(connected.elapsed().as_secs_f64());
                                 }
                             }
                         }

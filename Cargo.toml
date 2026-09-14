@@ -1,14 +1,18 @@
 [package]
-name = "midas-model-test"
+name = "probelm"
 version = "0.1.0"
 edition = "2021"
-description = "Probe/test models on a 9Router gateway (ping/latency/caps), table + JSON output"
+description = "Probe and benchmark models on an OpenAI-compatible gateway: ping, latency, throughput, caps"
 license = "MIT"
+default-run = "probelm"
+
+[[bin]]
+name = "probelm"
+path = "src/main.rs"
 
 [[bin]]
 name = "mtest"
 path = "src/main.rs"
-
 [dependencies]
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls"], default-features = false }

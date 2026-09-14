@@ -18,9 +18,9 @@ const COLOR_RED: &str = "\x1b[31m";
 const COLOR_CYAN: &str = "\x1b[36m";
 const COLOR_YELLOW: &str = "\x1b[33m";
 
-/// Probe and benchmark models on a 9Router gateway: ping, latency, throughput, caps.
+/// Probe and benchmark models on an OpenAI-compatible gateway: ping, latency, throughput, caps.
 #[derive(Parser)]
-#[command(name = "mtest", version, about, subcommand_negates_reqs = true)]
+#[command(name = "probelm", version, about, subcommand_negates_reqs = true)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
