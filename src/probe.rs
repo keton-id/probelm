@@ -189,8 +189,14 @@ async fn latency(host: &str, key: &str, opts: &ProbeOpts) -> Result<LatencyOutco
         tokens = chunk_count.max((accumulated_chars as u64 + 3) / 4);
     }
 
-    let rate = if total > 0.0 && tokens > 0 {
-        Some(tokens as f64 / total)
+    // Fair throughput: tokens divided by generation streaming time (total - pure TTFT)
+    let gen_duration = match ttft {
+        Some(t) if total > t => (total - t).max(0.001),
+        _ => total.max(0.001),
+    };
+
+    let rate = if gen_duration > 0.0 && tokens > 0 {
+        Some(tokens as f64 / gen_duration)
     } else {
         None
     };
