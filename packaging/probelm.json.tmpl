@@ -1,0 +1,32 @@
+{
+  "version": "@VERSION@",
+  "description": "Probe and benchmark models through an OpenAI-compatible gateway",
+  "homepage": "https://github.com/keton-id/probelm",
+  "license": "MIT",
+  "architecture": {
+    "64bit": {
+      "url": "@WINDOWS_X86_64_URL@",
+      "hash": "@WINDOWS_X86_64_SHA@"
+    },
+    "arm64": {
+      "url": "@WINDOWS_AARCH64_URL@",
+      "hash": "@WINDOWS_AARCH64_SHA@"
+    }
+  },
+  "bin": [
+    ["probelm.exe", "probelm"]
+  ],
+  "checkver": {
+    "github": "https://github.com/keton-id/probelm"
+  },
+  "autoupdate": {
+    "architecture": {
+      "64bit": {
+        "url": "https://github.com/keton-id/probelm/releases/download/v$version/probelm-windows-x86_64.zip"
+      },
+      "arm64": {
+        "url": "https://github.com/keton-id/probelm/releases/download/v$version/probelm-windows-aarch64.zip"
+      }
+    }
+  }
+}

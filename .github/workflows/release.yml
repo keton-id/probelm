@@ -1,0 +1,205 @@
+name: Release
+
+# A published GitHub Release is the only automatic build trigger. The manual
+# path exists to recover distribution for an already-created release tag.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag, for example v0.1.0
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+
+jobs:
+  build:
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - runner: macos-14
+            target: aarch64-apple-darwin
+            asset: probelm-macos-aarch64
+            archive: tar.gz
+          - runner: macos-14
+            target: x86_64-apple-darwin
+            asset: probelm-macos-x86_64
+            archive: tar.gz
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            asset: probelm-linux-aarch64
+            archive: tar.gz
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            asset: probelm-linux-x86_64
+            archive: tar.gz
+          - runner: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            asset: probelm-windows-aarch64
+            archive: zip
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            asset: probelm-windows-x86_64
+            archive: zip
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-${{ matrix.target }}
+      - run: cargo build --release --target ${{ matrix.target }} --locked
+      - name: Package Unix archive
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -czf "${{ matrix.asset }}.tar.gz" -C "target/${{ matrix.target }}/release" probelm
+      - name: Package Windows archive
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "target/${{ matrix.target }}/release/probelm.exe" -DestinationPath "${{ matrix.asset }}.zip" -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}.${{ matrix.archive }}
+          if-no-files-found: error
+
+  publish-assets:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Generate checksums
+        working-directory: artifacts
+        run: |
+          set -euo pipefail
+          for asset in probelm-*.tar.gz probelm-*.zip; do
+            sha256sum "$asset" > "$asset.sha256"
+          done
+          sha256sum probelm-*.tar.gz probelm-*.zip > SHA256SUMS
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$RELEASE_TAG" artifacts/* --clobber --repo "$GITHUB_REPOSITORY"
+
+  publish-crates:
+    needs: publish-assets
+    runs-on: ubuntu-latest
+    environment: Release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+      - name: Verify and publish probelm
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: |
+          set -euo pipefail
+          test "$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')" = "${RELEASE_TAG#v}"
+          cargo publish --locked
+
+  publish-npm:
+    needs: publish-assets
+    runs-on: ubuntu-latest
+    environment: Release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+      - name: Upgrade npm for Trusted Publishing
+        run: npm install -g npm@11.5.2
+      - name: Set package version from release tag
+        working-directory: npm
+        run: npm version "${RELEASE_TAG#v}" --no-git-tag-version --allow-same-version
+      - name: Publish probelm to npm
+        working-directory: npm
+        run: npm publish --access public
+
+  publish-taps:
+    needs: publish-assets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+      - name: Render Homebrew formula and Scoop manifest
+        env:
+          GH_TOKEN: ${{ secrets.TAP_PUBLISH_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}"
+          work="$(mktemp -d)"
+          trap 'rm -rf "$work"' EXIT
+          for asset in \
+            probelm-macos-aarch64.tar.gz \
+            probelm-macos-x86_64.tar.gz \
+            probelm-linux-aarch64.tar.gz \
+            probelm-linux-x86_64.tar.gz \
+            probelm-windows-aarch64.zip \
+            probelm-windows-x86_64.zip; do
+            gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$asset" --dir "$work"
+          done
+          sha() { shasum -a 256 "$work/$1" | cut -d' ' -f1; }
+          sed \
+            -e "s|@VERSION@|$version|g" \
+            -e "s|@MACOS_AARCH64_URL@|$base/probelm-macos-aarch64.tar.gz|g" \
+            -e "s|@MACOS_AARCH64_SHA@|$(sha probelm-macos-aarch64.tar.gz)|g" \
+            -e "s|@MACOS_X86_64_URL@|$base/probelm-macos-x86_64.tar.gz|g" \
+            -e "s|@MACOS_X86_64_SHA@|$(sha probelm-macos-x86_64.tar.gz)|g" \
+            -e "s|@LINUX_AARCH64_URL@|$base/probelm-linux-aarch64.tar.gz|g" \
+            -e "s|@LINUX_AARCH64_SHA@|$(sha probelm-linux-aarch64.tar.gz)|g" \
+            -e "s|@LINUX_X86_64_URL@|$base/probelm-linux-x86_64.tar.gz|g" \
+            -e "s|@LINUX_X86_64_SHA@|$(sha probelm-linux-x86_64.tar.gz)|g" \
+            packaging/probelm.rb.tmpl > "$work/probelm.rb"
+          sed \
+            -e "s|@VERSION@|$version|g" \
+            -e "s|@WINDOWS_AARCH64_URL@|$base/probelm-windows-aarch64.zip|g" \
+            -e "s|@WINDOWS_AARCH64_SHA@|$(sha probelm-windows-aarch64.zip)|g" \
+            -e "s|@WINDOWS_X86_64_URL@|$base/probelm-windows-x86_64.zip|g" \
+            -e "s|@WINDOWS_X86_64_SHA@|$(sha probelm-windows-x86_64.zip)|g" \
+            packaging/probelm.json.tmpl > "$work/probelm.json"
+          gh repo clone keton-id/homebrew-tap "$work/homebrew-tap"
+          mkdir -p "$work/homebrew-tap/Formula"
+          cp "$work/probelm.rb" "$work/homebrew-tap/Formula/probelm.rb"
+          git -C "$work/homebrew-tap" add Formula/probelm.rb
+          git -C "$work/homebrew-tap" -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "feat: update probelm $version" || true
+          git -C "$work/homebrew-tap" push
+          gh repo clone keton-id/scoop-bucket "$work/scoop-bucket"
+          mkdir -p "$work/scoop-bucket/bucket"
+          cp "$work/probelm.json" "$work/scoop-bucket/bucket/probelm.json"
+          git -C "$work/scoop-bucket" add bucket/probelm.json
+          git -C "$work/scoop-bucket" -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "feat: update probelm $version" || true
+          git -C "$work/scoop-bucket" push

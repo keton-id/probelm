@@ -1,0 +1,21 @@
+{
+  "name": "probelm",
+  "version": "0.0.0",
+  "description": "Probe and benchmark models through an OpenAI-compatible gateway",
+  "homepage": "https://github.com/keton-id/probelm",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/keton-id/probelm.git",
+    "directory": "npm"
+  },
+  "license": "MIT",
+  "keywords": ["llm", "benchmark", "probe", "openai", "cli"],
+  "engines": { "node": ">=18" },
+  "bin": { "probelm": "bin/probelm.js" },
+  "files": ["bin/probelm.js", "scripts/install.js", "README.md"],
+  "scripts": {
+    "postinstall": "node scripts/install.js",
+    "selftest": "node scripts/install.js --selftest"
+  },
+  "publishConfig": { "access": "public" }
+}

@@ -1,3 +1,9 @@
 /target
 models.json
 config.json
+.codex/
+.claude/
+.agents/
+.forgeguard/
+npm/vendor/
+npm/*.tgz
