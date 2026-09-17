@@ -22,6 +22,7 @@ For code changes, use `/forgeguard-engineering`.
 - `script/install.ps1`: Windows PowerShell release installer.
 - `Makefile`: local formatting, checks, build, packaging, and installer targets.
 - `npm/`: npm wrapper that downloads and verifies the matching GitHub Release archive.
+- `src/mcp.rs`: stdio MCP server, tool schemas, and Kurir harness registration.
 - `packaging/probelm.rb.tmpl`: Homebrew formula source.
 - `packaging/probelm.json.tmpl`: Scoop manifest source.
 - `.github/workflows/ci.yml`: standard Rust format, lint, check, and test gate.
@@ -66,6 +67,15 @@ No npm or crates.io long-lived token belongs in repository files.
 
 Asset names are a compatibility contract shared by `.github/workflows/release.yml`, `script/install.sh`, `script/install.ps1`, `npm/scripts/install.js`, the Homebrew template, and the Scoop template. Change all consumers together.
 - Every downloader verifies the archive SHA-256 before extraction. The installer creates `probelm` as the primary command and preserves a local compatibility alias for existing users.
+
+## MCP contract
+
+- `probelm mcp serve` is the harness entrypoint and uses RMCP stdio transport.
+- `probelm mcp install` requires an interactive stdin/stdout TTY when `--client` is omitted, matching the FluxGuard installer pattern.
+- `probelm mcp install --client <harness>` is the non-interactive path for automation.
+- Kurir owns harness-specific registration, configuration paths, scopes, backups, and delegated client CLIs.
+- The server exposes `list_models`, `probe_models`, and `sync_specs` with JSON-schema-backed responses.
+- Gateway credentials stay in runtime configuration and are never returned by MCP responses.
 
 ## Local checks
 

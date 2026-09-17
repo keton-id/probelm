@@ -39,6 +39,28 @@ probelm sync-specs
 
 `test` juga menerima alias `probe`, `check`, `bench`, dan `run`.
 
+## MCP untuk harness
+
+`probelm` dapat berjalan sebagai server MCP lokal melalui stdio. Daftarkan
+ke harness agent menggunakan Kurir:
+
+```bash
+# Installer interaktif melalui TTY
+probelm mcp install
+
+# Registrasi non-interaktif
+probelm mcp install --client claude-code
+probelm mcp install --client codex --project
+
+# Perintah yang dijalankan harness
+probelm mcp serve
+```
+
+Installer interaktif membutuhkan TTY agar dapat menampilkan menu pemilihan
+harness. Gunakan `--client` untuk automation. Registrasi membuat entry stdio
+yang menjalankan `probelm mcp serve`; server memakai konfigurasi gateway yang
+sama dengan CLI dan menjaga output protokol di stdout.
+
 ### Inisialisasi konfigurasi
 
 ```bash
