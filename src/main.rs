@@ -147,7 +147,7 @@ async fn main() {
         Some(Command::Test(a)) => cmd_test(a).await,
         Some(Command::SyncSpecs) => cmd_sync_specs().await,
         None => {
-            eprintln!("usage: mtest <init|test|list|sync-specs> [options] — see --help");
+            eprintln!("usage: probelm <init|test|list|sync-specs> [options] — see --help");
             eprintln!("aliases for 'test': probe, check, bench, run");
             2
         }
@@ -269,7 +269,7 @@ async fn cmd_init(args: &InitArgs) -> i32 {
                     }
                 }
                 let mut sorted_prefixes: Vec<_> = prefix_counts.into_iter().collect();
-                sorted_prefixes.sort_by(|a, b| b.1.cmp(&a.1));
+                sorted_prefixes.sort_by_key(|a| std::cmp::Reverse(a.1));
                 let summary = sorted_prefixes
                     .iter()
                     .take(4)
@@ -279,7 +279,9 @@ async fn cmd_init(args: &InitArgs) -> i32 {
                 println!("    Available groups: {summary}");
 
                 let default_prefix = args.prefix.as_deref().unwrap_or("midas");
-                let filter_prompt = format!("? Filter models to include ('{default_prefix}', 'all', or comma-separated)");
+                let filter_prompt = format!(
+                    "? Filter models to include ('{default_prefix}', 'all', or comma-separated)"
+                );
                 let filter_input = prompt_line(&filter_prompt, Some(default_prefix));
 
                 let matched: Vec<String> = if filter_input == "all" {
@@ -300,7 +302,11 @@ async fn cmd_init(args: &InitArgs) -> i32 {
                 };
 
                 if matched.is_empty() {
-                    println!("! No models matched '{}', adding all {} models.", filter_input, entries.len());
+                    println!(
+                        "! No models matched '{}', adding all {} models.",
+                        filter_input,
+                        entries.len()
+                    );
                     entries.iter().map(|m| m.id.clone()).collect()
                 } else {
                     println!("    Selected {} models for configuration.", matched.len());
@@ -344,8 +350,12 @@ async fn cmd_init(args: &InitArgs) -> i32 {
     let target_path: PathBuf = if let Some(out) = &args.out {
         PathBuf::from(out)
     } else if args.global {
-        let home = std::env::var_os("HOME").expect("HOME environment variable required for --global");
-        Path::new(&home).join(".config").join("probelm").join("config.json")
+        let home =
+            std::env::var_os("HOME").expect("HOME environment variable required for --global");
+        Path::new(&home)
+            .join(".config")
+            .join("probelm")
+            .join("config.json")
     } else if interactive {
         println!();
         println!("Save target options:");
@@ -354,7 +364,10 @@ async fn cmd_init(args: &InitArgs) -> i32 {
         let choice = prompt_line("? Choose save location [1/2]", Some("1"));
         if choice == "2" {
             let home = std::env::var_os("HOME").expect("HOME directory not found");
-            Path::new(&home).join(".config").join("probelm").join("config.json")
+            Path::new(&home)
+                .join(".config")
+                .join("probelm")
+                .join("config.json")
         } else {
             PathBuf::from("config.json")
         }
@@ -365,7 +378,10 @@ async fn cmd_init(args: &InitArgs) -> i32 {
     // Check overwrite
     if target_path.exists() && !args.force && interactive {
         let confirm = prompt_line(
-            &format!("! File '{}' already exists. Overwrite? (y/N)", target_path.display()),
+            &format!(
+                "! File '{}' already exists. Overwrite? (y/N)",
+                target_path.display()
+            ),
             Some("n"),
         );
         if confirm.to_lowercase() != "y" && confirm.to_lowercase() != "yes" {
@@ -409,7 +425,10 @@ async fn cmd_init(args: &InitArgs) -> i32 {
     }
 
     println!();
-    println!("✓ Configuration successfully written to: {}", target_path.display());
+    println!(
+        "✓ Configuration successfully written to: {}",
+        target_path.display()
+    );
     println!("  - Gateway URL : {}", base_url);
     println!("  - API Key     : {}", mask_key(&api_key));
     println!("  - Models count: {}", selected_models.len());
@@ -448,9 +467,13 @@ async fn cmd_list(args: &ListArgs) -> i32 {
 
     let filtered: Vec<_> = entries
         .iter()
-        .filter(|m| args.owned_by.as_deref().map_or(true, |o| m.owned_by.as_deref() == Some(o)))
         .filter(|m| {
-            args.prefix.as_deref().map_or(true, |p| {
+            args.owned_by
+                .as_deref()
+                .is_none_or(|o| m.owned_by.as_deref() == Some(o))
+        })
+        .filter(|m| {
+            args.prefix.as_deref().is_none_or(|p| {
                 p.split(',').any(|prefix| {
                     let prefix = prefix.trim();
                     m.id.starts_with(&format!("{prefix}/"))
@@ -471,7 +494,7 @@ async fn cmd_list(args: &ListArgs) -> i32 {
             .collect();
         println!("{}", serde_json::to_string_pretty(&arr).unwrap());
     } else {
-        println!("{:<42} {}", "MODEL", "OWNED_BY");
+        println!("{:<42} OWNED_BY", "MODEL");
         println!("{}", "-".repeat(60));
         for m in &filtered {
             println!("{:<42} {}", m.id, m.owned_by.as_deref().unwrap_or("-"));
@@ -512,7 +535,8 @@ async fn cmd_test(args: &TestArgs) -> i32 {
         combined
     } else if !args.models.is_empty() {
         args.models.clone()
-    } else if args.all || args.prefix.is_some() || args.owned_by.is_some() || cfg.models.is_empty() {
+    } else if args.all || args.prefix.is_some() || args.owned_by.is_some() || cfg.models.is_empty()
+    {
         all_discovered_ids.clone()
     } else {
         cfg.models.clone()
@@ -551,17 +575,18 @@ async fn cmd_test(args: &TestArgs) -> i32 {
     targets.retain(|item| seen.insert(item.clone()));
 
     if let Some(p) = &args.prefix {
-        let prefixes: Vec<&str> = p.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
-        targets = targets
-            .into_iter()
-            .filter(|m| {
-                prefixes.iter().any(|prefix| {
-                    m.starts_with(&format!("{prefix}/"))
-                        || m.starts_with(prefix)
-                        || matches_pattern(prefix, m)
-                })
-            })
+        let prefixes: Vec<&str> = p
+            .split(',')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
             .collect();
+        targets.retain(|m| {
+            prefixes.iter().any(|prefix| {
+                m.starts_with(&format!("{prefix}/"))
+                    || m.starts_with(prefix)
+                    || matches_pattern(prefix, m)
+            })
+        });
     }
     if let Some(o) = &args.owned_by {
         let owned_ids: Vec<String> = entries
@@ -569,18 +594,15 @@ async fn cmd_test(args: &TestArgs) -> i32 {
             .filter(|m| m.owned_by.as_deref() == Some(o))
             .map(|m| m.id.clone())
             .collect();
-        targets = targets.into_iter().filter(|m| owned_ids.contains(m)).collect();
+        targets.retain(|m| owned_ids.contains(m));
     }
     if !args.caps.is_empty() {
-        targets = targets
-            .into_iter()
-            .filter(|m| {
-                caps_map
-                    .get(m)
-                    .map(|c| args.caps.iter().any(|w| c.names().contains(w)))
-                    .unwrap_or(false)
-            })
-            .collect();
+        targets.retain(|m| {
+            caps_map
+                .get(m)
+                .map(|c| args.caps.iter().any(|w| c.names().contains(w)))
+                .unwrap_or(false)
+        });
     }
     if targets.is_empty() {
         eprintln!("ERROR: no models matched the specified criteria");
@@ -691,7 +713,11 @@ async fn cmd_test(args: &TestArgs) -> i32 {
     }
 
     // Exit code: 1 if any ping failed
-    if do_ping && results.iter().any(|r| r.ping.as_ref().map_or(true, |p| !p.ok)) {
+    if do_ping
+        && results
+            .iter()
+            .any(|r| r.ping.as_ref().is_none_or(|p| !p.ok))
+    {
         1
     } else {
         0
@@ -734,7 +760,11 @@ pub fn matches_pattern(pattern: &str, text: &str) -> bool {
     true
 }
 
-fn compare_probe_result(a: &probe::ProbeResult, b: &probe::ProbeResult, key: &str) -> std::cmp::Ordering {
+fn compare_probe_result(
+    a: &probe::ProbeResult,
+    b: &probe::ProbeResult,
+    key: &str,
+) -> std::cmp::Ordering {
     let key_lower = key.to_lowercase();
     let (field, is_desc) = if let Some(stripped) = key_lower.strip_suffix(":asc") {
         (stripped, false)
@@ -742,8 +772,8 @@ fn compare_probe_result(a: &probe::ProbeResult, b: &probe::ProbeResult, key: &st
         (stripped, true)
     } else {
         match key_lower.as_str() {
-            "ctx" | "context" | "context_window" | "out" | "max_out" | "output" | "speed" | "rate" | "toks"
-            | "tps" => (key_lower.as_str(), true),
+            "ctx" | "context" | "context_window" | "out" | "max_out" | "output" | "speed"
+            | "rate" | "toks" | "tps" => (key_lower.as_str(), true),
             _ => (key_lower.as_str(), false),
         }
     };
@@ -760,23 +790,53 @@ fn compare_probe_result(a: &probe::ProbeResult, b: &probe::ProbeResult, key: &st
             out_a.cmp(&out_b)
         }
         "speed" | "rate" | "toks" | "tps" => {
-            let rate_a = a.latency.as_ref().and_then(|l| l.rate_per_sec).unwrap_or(0.0);
-            let rate_b = b.latency.as_ref().and_then(|l| l.rate_per_sec).unwrap_or(0.0);
-            rate_a.partial_cmp(&rate_b).unwrap_or(std::cmp::Ordering::Equal)
+            let rate_a = a
+                .latency
+                .as_ref()
+                .and_then(|l| l.rate_per_sec)
+                .unwrap_or(0.0);
+            let rate_b = b
+                .latency
+                .as_ref()
+                .and_then(|l| l.rate_per_sec)
+                .unwrap_or(0.0);
+            rate_a
+                .partial_cmp(&rate_b)
+                .unwrap_or(std::cmp::Ordering::Equal)
         }
         "ttft" | "latency" | "first" => {
-            let ttft_a = a.latency.as_ref().and_then(|l| l.ttft_secs).unwrap_or(f64::MAX);
-            let ttft_b = b.latency.as_ref().and_then(|l| l.ttft_secs).unwrap_or(f64::MAX);
-            ttft_a.partial_cmp(&ttft_b).unwrap_or(std::cmp::Ordering::Equal)
+            let ttft_a = a
+                .latency
+                .as_ref()
+                .and_then(|l| l.ttft_secs)
+                .unwrap_or(f64::MAX);
+            let ttft_b = b
+                .latency
+                .as_ref()
+                .and_then(|l| l.ttft_secs)
+                .unwrap_or(f64::MAX);
+            ttft_a
+                .partial_cmp(&ttft_b)
+                .unwrap_or(std::cmp::Ordering::Equal)
         }
         "total" | "time" => {
-            let tot_a = a.latency.as_ref().and_then(|l| l.total_secs).unwrap_or(f64::MAX);
-            let tot_b = b.latency.as_ref().and_then(|l| l.total_secs).unwrap_or(f64::MAX);
-            tot_a.partial_cmp(&tot_b).unwrap_or(std::cmp::Ordering::Equal)
+            let tot_a = a
+                .latency
+                .as_ref()
+                .and_then(|l| l.total_secs)
+                .unwrap_or(f64::MAX);
+            let tot_b = b
+                .latency
+                .as_ref()
+                .and_then(|l| l.total_secs)
+                .unwrap_or(f64::MAX);
+            tot_a
+                .partial_cmp(&tot_b)
+                .unwrap_or(std::cmp::Ordering::Equal)
         }
         "ping" | "status" | "ok" => {
-            let ok_a = a.ping.as_ref().map_or(false, |p| p.ok);
-            let ok_b = b.ping.as_ref().map_or(false, |p| p.ok);
+            let ok_a = a.ping.as_ref().is_some_and(|p| p.ok);
+            let ok_b = b.ping.as_ref().is_some_and(|p| p.ok);
             ok_a.cmp(&ok_b)
         }
         "name" | "model" | "id" => a.model.cmp(&b.model),
@@ -819,7 +879,16 @@ fn print_table(results: &[probe::ProbeResult], _do_ping: bool, _do_latency: bool
     if do_caps {
         println!(
             "{}{:<36} {:<5} {:>8} {:>8} {:>7}  {:<12} {:>6} {:>6}{}",
-            COLOR_BOLD, "MODEL", "PING", "TTFT(s)", "TOTAL(s)", "TOK/s", "CAPS", "CTX", "OUT", COLOR_RESET
+            COLOR_BOLD,
+            "MODEL",
+            "PING",
+            "TTFT(s)",
+            "TOTAL(s)",
+            "TOK/s",
+            "CAPS",
+            "CTX",
+            "OUT",
+            COLOR_RESET
         );
         println!("{}{}{}", COLOR_DIM, "-".repeat(95), COLOR_RESET);
     } else {
@@ -914,9 +983,24 @@ fn print_markdown_table(results: &[probe::ProbeResult], do_caps: bool) {
                 Some(_) => "FAIL",
                 None => "-",
             };
-            let ttft = r.latency.as_ref().and_then(|l| l.ttft_secs).map(|v| format!("{v:.3}")).unwrap_or_else(|| "-".into());
-            let total = r.latency.as_ref().and_then(|l| l.total_secs).map(|v| format!("{v:.3}")).unwrap_or_else(|| "-".into());
-            let rate = r.latency.as_ref().and_then(|l| l.rate_per_sec).map(|v| format!("{v:.1}")).unwrap_or_else(|| "-".into());
+            let ttft = r
+                .latency
+                .as_ref()
+                .and_then(|l| l.ttft_secs)
+                .map(|v| format!("{v:.3}"))
+                .unwrap_or_else(|| "-".into());
+            let total = r
+                .latency
+                .as_ref()
+                .and_then(|l| l.total_secs)
+                .map(|v| format!("{v:.3}"))
+                .unwrap_or_else(|| "-".into());
+            let rate = r
+                .latency
+                .as_ref()
+                .and_then(|l| l.rate_per_sec)
+                .map(|v| format!("{v:.1}"))
+                .unwrap_or_else(|| "-".into());
             let (icons, ctx, out) = if let Some(c) = &r.caps {
                 (
                     c.icons(),
@@ -926,7 +1010,10 @@ fn print_markdown_table(results: &[probe::ProbeResult], do_caps: bool) {
             } else {
                 ("-".to_string(), "-".to_string(), "-".to_string())
             };
-            println!("| `{}` | {} | {} | {} | {} | {} | {} | {} |", r.model, ping, ttft, total, rate, icons, ctx, out);
+            println!(
+                "| `{}` | {} | {} | {} | {} | {} | {} | {} |",
+                r.model, ping, ttft, total, rate, icons, ctx, out
+            );
         }
     } else {
         println!("| Model | Ping | TTFT (s) | Total (s) | Tok/s |");
@@ -937,10 +1024,28 @@ fn print_markdown_table(results: &[probe::ProbeResult], do_caps: bool) {
                 Some(_) => "FAIL",
                 None => "-",
             };
-            let ttft = r.latency.as_ref().and_then(|l| l.ttft_secs).map(|v| format!("{v:.3}")).unwrap_or_else(|| "-".into());
-            let total = r.latency.as_ref().and_then(|l| l.total_secs).map(|v| format!("{v:.3}")).unwrap_or_else(|| "-".into());
-            let rate = r.latency.as_ref().and_then(|l| l.rate_per_sec).map(|v| format!("{v:.1}")).unwrap_or_else(|| "-".into());
-            println!("| `{}` | {} | {} | {} | {} |", r.model, ping, ttft, total, rate);
+            let ttft = r
+                .latency
+                .as_ref()
+                .and_then(|l| l.ttft_secs)
+                .map(|v| format!("{v:.3}"))
+                .unwrap_or_else(|| "-".into());
+            let total = r
+                .latency
+                .as_ref()
+                .and_then(|l| l.total_secs)
+                .map(|v| format!("{v:.3}"))
+                .unwrap_or_else(|| "-".into());
+            let rate = r
+                .latency
+                .as_ref()
+                .and_then(|l| l.rate_per_sec)
+                .map(|v| format!("{v:.1}"))
+                .unwrap_or_else(|| "-".into());
+            println!(
+                "| `{}` | {} | {} | {} | {} |",
+                r.model, ping, ttft, total, rate
+            );
         }
     }
 }
