@@ -95,7 +95,7 @@ impl Config {
 
         if api_key.is_empty() {
             return Err(
-                "No API key configured.\n  Run 'mtest init' to generate config.json, or export ROUTER_KEY=<key>.".to_string()
+                "No API key configured.\n  Run 'probelm init' to generate config.json, or export ROUTER_KEY=<key>.".to_string()
             );
         }
 

@@ -1,3 +1,4 @@
+use schemars::JsonSchema;
 use serde::Serialize;
 use std::time::Instant;
 
@@ -68,7 +69,7 @@ impl SseParser {
 }
 
 /// Result of probing one model. Fields omitted when a test is skipped.
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Default, JsonSchema, Serialize)]
 pub struct ProbeResult {
     pub model: String,
     pub caps: Option<Capabilities>,
@@ -78,13 +79,13 @@ pub struct ProbeResult {
     pub latency: Option<LatencyOutcome>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, JsonSchema, Serialize)]
 pub struct PingOutcome {
     pub ok: bool,
     pub http_code: u16,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, JsonSchema, Serialize)]
 pub struct LatencyOutcome {
     pub ttft_secs: Option<f64>,
     pub total_secs: Option<f64>,
