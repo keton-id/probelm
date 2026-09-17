@@ -1,0 +1,29 @@
+name: Bug report
+description: Report a reproducible problem with probelm
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Please remove API keys, tokens, and personal data before submitting.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `probelm --version`.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Exact command, expected result, and actual result.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, architecture, installation method, and gateway type.
+    validations:
+      required: true
