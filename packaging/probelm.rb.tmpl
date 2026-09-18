@@ -1,0 +1,27 @@
+class Probelm < Formula
+  desc "Probe and benchmark models through an OpenAI-compatible gateway"
+  homepage "https://github.com/keton-id/probelm"
+  version "@VERSION@"
+
+  if OS.mac? && Hardware::CPU.arm?
+    url "@MACOS_AARCH64_URL@"
+    sha256 "@MACOS_AARCH64_SHA@"
+  elsif OS.mac?
+    url "@MACOS_X86_64_URL@"
+    sha256 "@MACOS_X86_64_SHA@"
+  elsif OS.linux? && Hardware::CPU.arm?
+    url "@LINUX_AARCH64_URL@"
+    sha256 "@LINUX_AARCH64_SHA@"
+  elsif OS.linux?
+    url "@LINUX_X86_64_URL@"
+    sha256 "@LINUX_X86_64_SHA@"
+  end
+
+  def install
+    bin.install "probelm"
+  end
+
+  test do
+    assert_match version.to_s, shell_output("#{bin}/probelm --version")
+  end
+end

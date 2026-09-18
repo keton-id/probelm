@@ -23,9 +23,23 @@ pub fn normalize_model_name(id: &str) -> String {
     let clean = id.trim().to_lowercase();
     // Common prefixes from 9router / aggregators
     for prefix in &[
-        "midas/", "cx/", "combo/", "openai/", "anthropic/", "deepseek/",
-        "z-ai/", "zai-org/", "zai/", "google/", "meta-llama/", "qwen/",
-        "moonshotai/", "minimax/", "hpc-ai/", "azure_ai/", "bedrock/",
+        "midas/",
+        "cx/",
+        "combo/",
+        "openai/",
+        "anthropic/",
+        "deepseek/",
+        "z-ai/",
+        "zai-org/",
+        "zai/",
+        "google/",
+        "meta-llama/",
+        "qwen/",
+        "moonshotai/",
+        "minimax/",
+        "hpc-ai/",
+        "azure_ai/",
+        "bedrock/",
     ] {
         if let Some(stripped) = clean.strip_prefix(prefix) {
             return stripped.to_string();
@@ -67,7 +81,10 @@ static BUILTIN_SPECS: &[(&str, u64, u64, bool, bool, bool)] = &[
 
 fn get_cache_path() -> Option<PathBuf> {
     std::env::var_os("HOME").map(|h| {
-        Path::new(&h).join(".config").join("probelm").join("specs-cache.json")
+        Path::new(&h)
+            .join(".config")
+            .join("probelm")
+            .join("specs-cache.json")
     })
 }
 
@@ -178,7 +195,9 @@ pub async fn sync_remote_specs() -> Result<usize, String> {
             let out = val.get("max_output_tokens").and_then(|v| v.as_u64());
             let vision = val.get("supports_vision").and_then(|v| v.as_bool());
             let reasoning = val.get("supports_reasoning").and_then(|v| v.as_bool());
-            let tools = val.get("supports_function_calling").and_then(|v| v.as_bool());
+            let tools = val
+                .get("supports_function_calling")
+                .and_then(|v| v.as_bool());
 
             if ctx.is_some() || out.is_some() {
                 spec_map.insert(
@@ -204,8 +223,8 @@ pub async fn sync_remote_specs() -> Result<usize, String> {
         if let Some(parent) = cache_path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
-        let json_str = serde_json::to_string_pretty(&spec_map)
-            .map_err(|e| format!("Serialize error: {e}"))?;
+        let json_str =
+            serde_json::to_string_pretty(&spec_map).map_err(|e| format!("Serialize error: {e}"))?;
         std::fs::write(&cache_path, json_str)
             .map_err(|e| format!("Write {}: {e}", cache_path.display()))?;
     }

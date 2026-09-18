@@ -52,7 +52,10 @@ impl Config {
         }
         if path == "config.json" {
             if let Some(home) = std::env::var_os("HOME") {
-                let global = Path::new(&home).join(".config").join("probelm").join("config.json");
+                let global = Path::new(&home)
+                    .join(".config")
+                    .join("probelm")
+                    .join("config.json");
                 if global.exists() {
                     return Some(global);
                 }
@@ -66,8 +69,10 @@ impl Config {
     pub fn load(path: &str) -> Result<Config, String> {
         let resolved = Self::resolve_path(path);
         let file = if let Some(p) = &resolved {
-            let raw = std::fs::read_to_string(p).map_err(|e| format!("read {}: {e}", p.display()))?;
-            serde_json::from_str::<FileConfig>(&raw).map_err(|e| format!("parse {}: {e}", p.display()))?
+            let raw =
+                std::fs::read_to_string(p).map_err(|e| format!("read {}: {e}", p.display()))?;
+            serde_json::from_str::<FileConfig>(&raw)
+                .map_err(|e| format!("parse {}: {e}", p.display()))?
         } else if Path::new(path).exists() {
             let raw = std::fs::read_to_string(path).map_err(|e| format!("read {path}: {e}"))?;
             serde_json::from_str::<FileConfig>(&raw).map_err(|e| format!("parse {path}: {e}"))?
@@ -119,7 +124,10 @@ pub fn detect_local_9router_key() -> Option<String> {
     }
 
     if let Some(home) = std::env::var_os("HOME") {
-        let db_path = Path::new(&home).join(".9router").join("db").join("data.sqlite");
+        let db_path = Path::new(&home)
+            .join(".9router")
+            .join("db")
+            .join("data.sqlite");
         if db_path.exists() {
             // Try sqlite3 command
             if let Ok(output) = std::process::Command::new("sqlite3")
@@ -141,7 +149,9 @@ pub fn detect_local_9router_key() -> Option<String> {
                 // 9router keys typically start with "sk-" followed by hex
                 if let Some(idx) = content.find("sk-") {
                     let slice = &content[idx..];
-                    let end = slice.find(|c: char| c.is_whitespace() || c == '\0' || c == '"' || c == '\'').unwrap_or(slice.len());
+                    let end = slice
+                        .find(|c: char| c.is_whitespace() || c == '\0' || c == '"' || c == '\'')
+                        .unwrap_or(slice.len());
                     let candidate = &slice[..end];
                     if candidate.len() >= 20 {
                         return Some(candidate.to_string());

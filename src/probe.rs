@@ -215,7 +215,7 @@ async fn latency(host: &str, key: &str, opts: &ProbeOpts) -> Result<LatencyOutco
     if tokens == 0 && parser.chunk_count > 0 {
         tokens = parser
             .chunk_count
-            .max((parser.accumulated_chars as u64 + 3) / 4);
+            .max((parser.accumulated_chars as u64).div_ceil(4));
     }
 
     // Fair throughput: tokens divided by generation streaming time (total - pure TTFT)
@@ -238,6 +238,20 @@ async fn latency(host: &str, key: &str, opts: &ProbeOpts) -> Result<LatencyOutco
     })
 }
 
+/// Probe a single model.
+pub async fn probe_one(model: &str, opts: &ProbeOpts) -> Result<ProbeResult, String> {
+    let mut out = ProbeResult {
+        model: model.to_string(),
+        ..Default::default()
+    };
+    if opts.do_ping {
+        out.ping = Some(ping(model, &opts.api_key, opts).await?);
+    }
+    if opts.do_latency {
+        out.latency = Some(latency(model, &opts.api_key, opts).await?);
+    }
+    Ok(out)
+}
 #[cfg(test)]
 mod tests {
     use super::SseParser;
@@ -259,19 +273,4 @@ mod tests {
         assert_eq!(parser.tokens, 7);
         assert!(!parser.done);
     }
-}
-
-/// Probe a single model.
-pub async fn probe_one(model: &str, opts: &ProbeOpts) -> Result<ProbeResult, String> {
-    let mut out = ProbeResult {
-        model: model.to_string(),
-        ..Default::default()
-    };
-    if opts.do_ping {
-        out.ping = Some(ping(model, &opts.api_key, opts).await?);
-    }
-    if opts.do_latency {
-        out.latency = Some(latency(model, &opts.api_key, opts).await?);
-    }
-    Ok(out)
 }

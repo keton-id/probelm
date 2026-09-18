@@ -1,10 +1,10 @@
 # probelm
 
-`probelm` is a Rust CLI for probing and benchmarking models through an OpenAI-compatible gateway. It measures availability, time to first token (TTFT), total latency, throughput, and model capabilities.
+`probelm` adalah CLI Rust untuk melakukan probe dan benchmarking model melalui gateway yang kompatibel dengan OpenAI. Tool ini mengukur ketersediaan, *time to first token* (TTFT), latensi total, throughput, dan kapabilitas model.
 
 ## Quickstart
 
-### macOS and Linux
+### macOS dan Linux
 
 ```bash
 curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/keton-id/probelm/master/script/install.sh | bash
@@ -12,7 +12,7 @@ probelm init --global -y
 probelm test
 ```
 
-To install from a checkout instead:
+Instalasi dari checkout:
 
 ```bash
 ./script/install.sh
@@ -26,9 +26,9 @@ probelm init --global -y
 probelm test
 ```
 
-The installers select the published binary for the current operating system and architecture. `PROBELM_VERSION` or the PowerShell `-Version` parameter can pin a release.
+Installer memilih binary yang sesuai dengan sistem operasi dan arsitektur. Versi dapat dipatok menggunakan `PROBELM_VERSION` atau parameter PowerShell `-Version`.
 
-## Commands
+## Perintah
 
 ```text
 probelm init [options]
@@ -37,23 +37,23 @@ probelm test [models] [options]
 probelm sync-specs
 ```
 
-`test` also accepts the aliases `probe`, `check`, `bench`, and `run`.
+`test` juga menerima alias `probe`, `check`, `bench`, dan `run`.
 
-### Initialize configuration
+### Inisialisasi konfigurasi
 
 ```bash
 probelm init --global -y
 probelm init --url http://localhost:20128 --api-key sk-...
 ```
 
-Configuration resolution order:
+Urutan resolusi konfigurasi:
 
 1. `--config <path>`
-2. `ROUTER_KEY` and `ROUTER_URL`
+2. `ROUTER_KEY` dan `ROUTER_URL`
 3. `./config.json`
 4. `$HOME/.config/probelm/config.json`
 
-Example configuration:
+Contoh konfigurasi:
 
 ```json
 {
@@ -69,30 +69,30 @@ Example configuration:
 }
 ```
 
-### Probe models
+### Probe model
 
 ```bash
-# Models from configuration
+# Model dari konfigurasi
 probelm test
 
-# One or more explicit models
+# Satu atau beberapa model tertentu
 probelm test midas/glm-5.2 midas/deepseek-v4-pro
 
-# Every model exposed by the gateway
+# Semua model yang tersedia di gateway
 probelm test --all
 
-# Wildcards, prefixes, ownership, and capabilities
+# Wildcard, prefix, owner, dan kapabilitas
 probelm test 'cx/*'
 probelm test --prefix cx,ag,midas
 probelm test --owned-by combo
 probelm test --all --cap reasoning
 
-# Custom prompt and parallel jobs
+# Prompt kustom dan job paralel
 probelm test midas/deepseek-v4-pro --prompt 'Reply in two sentences.'
 probelm test --all --jobs 8
 ```
 
-### Sort and format results
+### Mengurutkan dan memformat hasil
 
 ```bash
 probelm test --all --sort ctx,speed
@@ -104,9 +104,9 @@ probelm test --latency
 probelm test --all --caps-only
 ```
 
-Sort keys include `ctx`/`context`, `speed`/`rate`, `ttft`/`latency`, `out`/`max_out`, `ping`/`status`, and `name`/`model`.
+Kunci sort mencakup `ctx`/`context`, `speed`/`rate`, `ttft`/`latency`, `out`/`max_out`, `ping`/`status`, dan `name`/`model`.
 
-### Discover and synchronize models
+### Menemukan dan menyinkronkan model
 
 ```bash
 probelm list
@@ -115,9 +115,9 @@ probelm list --prefix midas --list-models midas-models.json
 probelm sync-specs
 ```
 
-`sync-specs` downloads the authoritative model specification database from LiteLLM and updates local metadata used by the probe.
+`sync-specs` mengunduh database spesifikasi model resmi dari LiteLLM dan memperbarui metadata lokal yang digunakan probe.
 
-## Building from source
+## Build dari source
 
 ```bash
 cargo build --release --locked
@@ -125,11 +125,11 @@ cargo run --release -- test --help
 make check-all
 ```
 
-The release build produces `probelm` as the primary binary.
+Build release menghasilkan `probelm` sebagai binary utama.
 
-## Distribution
+## Distribusi
 
-Published releases provide six archives:
+Setiap release menyediakan enam arsip:
 
 - macOS Apple silicon: `probelm-macos-aarch64.tar.gz`
 - macOS Intel: `probelm-macos-x86_64.tar.gz`
@@ -138,16 +138,16 @@ Published releases provide six archives:
 - Linux ARM64: `probelm-linux-aarch64.tar.gz`
 - Linux x86-64: `probelm-linux-x86_64.tar.gz`
 
-Each archive has a matching `.sha256` file and is listed in `SHA256SUMS`. Homebrew, Scoop, npm, and the PowerShell installer consume these same assets.
+Setiap arsip memiliki file `.sha256` dan tercantum di `SHA256SUMS`. Homebrew, Scoop, npm, dan installer PowerShell memakai asset yang sama.
 
-## Security
+## Keamanan
 
-Do not commit gateway API keys. Use environment variables or a configuration file excluded by `.gitignore`. Report vulnerabilities privately through the process in [SECURITY.md](SECURITY.md).
+Jangan commit API key gateway. Gunakan environment variable atau file konfigurasi yang dikecualikan oleh `.gitignore`. Laporkan kerentanan secara privat mengikuti proses di [SECURITY.md](SECURITY.md).
 
-## Contributing
+## Kontribusi
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), and [CLAUDE.md](CLAUDE.md) before opening a change.
+Baca [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), dan [CLAUDE.md](CLAUDE.md) sebelum mengajukan perubahan.
 
-## License
+## Lisensi
 
-MIT. See the package metadata and repository distribution terms.
+MIT. Lihat metadata package dan ketentuan distribusi repository.
