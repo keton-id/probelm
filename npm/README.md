@@ -35,9 +35,12 @@ probelm init [options]
 probelm list [options]
 probelm test [models] [options]
 probelm sync-specs
+probelm tui [options]
+probelm config [options]
 ```
 
 `test` also accepts the aliases `probe`, `check`, `bench`, and `run`.
+`tui` also accepts the aliases `manage` and `dashboard`.
 
 ## MCP for harnesses
 
