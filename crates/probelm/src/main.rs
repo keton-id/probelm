@@ -1,14 +1,16 @@
-pub mod adap;
-pub mod core;
 pub mod mcp;
 pub mod tty;
-pub mod tui;
+
+// Re-exports from workspace crates
+pub use probelm_adap as adap;
+pub use probelm_core as core;
+pub use probelm_tui as tui;
 
 // Backward-compatible re-exports
-pub use crate::core::config;
-pub use crate::core::models;
-pub use crate::core::probe;
-pub use crate::core::specs;
+pub use probelm_core::config;
+pub use probelm_core::models;
+pub use probelm_core::probe;
+pub use probelm_core::specs;
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -384,26 +386,7 @@ async fn cmd_sync_specs() -> i32 {
         }
     }
 }
-
-fn prompt_line(prompt: &str, default: Option<&str>) -> String {
-    if let Some(def) = default {
-        print!("{prompt} [{def}]: ");
-    } else {
-        print!("{prompt}: ");
-    }
-    let _ = io::stdout().flush();
-    let mut line = String::new();
-    if io::stdin().read_line(&mut line).is_ok() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            default.unwrap_or("").to_string()
-        } else {
-            trimmed.to_string()
-        }
-    } else {
-        default.unwrap_or("").to_string()
-    }
-}
+use crate::tty::prompt_input;
 
 fn mask_key(k: &str) -> String {
     if k.len() <= 8 {
@@ -430,7 +413,7 @@ async fn cmd_init(args: &InitArgs) -> i32 {
         .unwrap_or_else(|| "http://localhost:20128".to_string());
 
     let base_url = if interactive && args.url.is_none() {
-        prompt_line("? 9Router Gateway URL", Some(&default_url))
+        prompt_input("? 9Router Gateway URL", Some(&default_url))
     } else {
         default_url
     };
@@ -444,9 +427,9 @@ async fn cmd_init(args: &InitArgs) -> i32 {
         if let Some(ref dk) = detected_key {
             let masked = mask_key(dk);
             let prompt_text = format!("? 9Router API Key (detected: {masked})");
-            prompt_line(&prompt_text, Some(dk))
+            prompt_input(&prompt_text, Some(dk))
         } else {
-            let input = prompt_line("? 9Router API Key (e.g. sk-...)", None);
+            let input = prompt_input("? 9Router API Key (e.g. sk-...)", None);
             if input.is_empty() {
                 eprintln!("ERROR: API Key cannot be empty.");
                 return 2;
@@ -498,7 +481,7 @@ async fn cmd_init(args: &InitArgs) -> i32 {
                 let filter_prompt = format!(
                     "? Filter models to include ('{default_prefix}', 'all', or comma-separated)"
                 );
-                let filter_input = prompt_line(&filter_prompt, Some(default_prefix));
+                let filter_input = prompt_input(&filter_prompt, Some(default_prefix));
 
                 let matched: Vec<String> = if filter_input == "all" {
                     entries.iter().map(|m| m.id.clone()).collect()
@@ -577,7 +560,7 @@ async fn cmd_init(args: &InitArgs) -> i32 {
         println!("Save target options:");
         println!("  [1] Local project file (./config.json)");
         println!("  [2] Global user config (~/.config/probelm/config.json)");
-        let choice = prompt_line("? Choose save location [1/2]", Some("1"));
+        let choice = prompt_input("? Choose save location [1/2]", Some("1"));
         if choice == "2" {
             let home = std::env::var_os("HOME").expect("HOME directory not found");
             Path::new(&home)
@@ -593,7 +576,7 @@ async fn cmd_init(args: &InitArgs) -> i32 {
 
     // Check overwrite
     if target_path.exists() && !args.force && interactive {
-        let confirm = prompt_line(
+        let confirm = prompt_input(
             &format!(
                 "! File '{}' already exists. Overwrite? (y/N)",
                 target_path.display()

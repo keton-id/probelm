@@ -113,46 +113,15 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: rust-lang/crates-io-auth-action@v1
         id: auth
-      - name: Verify and publish probelm
+      - name: Verify and publish probelm workspace crates
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
         run: |
           set -euo pipefail
-          version="${RELEASE_TAG#v}"
-          manifest="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')"
-          if [ "$manifest" != "$version" ]; then
-            if [ "$GITHUB_EVENT_NAME" != "workflow_dispatch" ]; then
-              echo "::error::Cargo version $manifest does not match release tag $version"
-              exit 1
-            fi
-            VERSION="$version" python3 - <<'PY'
-          import os
-          import re
-          from pathlib import Path
-
-          version = os.environ["VERSION"]
-          cargo = Path("Cargo.toml")
-          cargo_text, cargo_count = re.subn(
-              r'(?m)(^\[package\]\nname = "probelm"\nversion = ")[^"]+(")',
-              rf"\g<1>{version}\g<2>",
-              cargo.read_text(),
-              count=1,
-          )
-          lock = Path("Cargo.lock")
-          lock_text, lock_count = re.subn(
-              r'(?m)(^\[\[package\]\]\nname = "probelm"\nversion = ")[^"]+(")',
-              rf"\g<1>{version}\g<2>",
-              lock.read_text(),
-              count=1,
-          )
-          if cargo_count != 1 or lock_count != 1:
-              raise SystemExit("could not synchronize Cargo package version")
-          cargo.write_text(cargo_text)
-          lock.write_text(lock_text)
-          PY
-          fi
-          test "$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')" = "$version"
-          cargo publish --locked --allow-dirty
+          cargo publish -p probelm-core --locked --allow-dirty
+          cargo publish -p probelm-adap --locked --allow-dirty
+          cargo publish -p probelm-tui --locked --allow-dirty
+          cargo publish -p probelm --locked --allow-dirty
 
   publish-npm:
     needs: publish-assets

@@ -1,7 +1,10 @@
 pub mod app;
 pub mod ui;
 
-use app::{App, InputMode, Tab};
+pub use app::{App, InputMode, ModelItem, Tab};
+pub use ui::render;
+
+use app::{InputMode as AppInputMode, Tab as AppTab};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use crossterm::execute;
 use crossterm::terminal::{
@@ -50,7 +53,7 @@ async fn event_loop<B: ratatui::backend::Backend>(
 
 async fn handle_key(app: &mut App, code: KeyCode) {
     match app.input_mode {
-        InputMode::Normal => match code {
+        AppInputMode::Normal => match code {
             KeyCode::Char('q') | KeyCode::Esc => {
                 app.should_quit = true;
             }
@@ -64,7 +67,7 @@ async fn handle_key(app: &mut App, code: KeyCode) {
                 app.toggle_selected_model();
             }
             KeyCode::Char('a') => {
-                app.input_mode = InputMode::AddingModel;
+                app.input_mode = AppInputMode::AddingModel;
                 app.input_buffer.clear();
             }
             KeyCode::Char('d') | KeyCode::Backspace => {
@@ -75,19 +78,19 @@ async fn handle_key(app: &mut App, code: KeyCode) {
             }
             KeyCode::Tab => {
                 app.active_tab = match app.active_tab {
-                    Tab::Models => Tab::Adapters,
-                    Tab::Adapters => Tab::Help,
-                    Tab::Help => Tab::Models,
+                    AppTab::Models => AppTab::Adapters,
+                    AppTab::Adapters => AppTab::Help,
+                    AppTab::Help => AppTab::Models,
                 };
             }
-            KeyCode::Char('1') => app.active_tab = Tab::Models,
-            KeyCode::Char('2') => app.active_tab = Tab::Adapters,
-            KeyCode::Char('3') => app.active_tab = Tab::Help,
+            KeyCode::Char('1') => app.active_tab = AppTab::Models,
+            KeyCode::Char('2') => app.active_tab = AppTab::Adapters,
+            KeyCode::Char('3') => app.active_tab = AppTab::Help,
             _ => {}
         },
-        InputMode::AddingModel => match code {
+        AppInputMode::AddingModel => match code {
             KeyCode::Esc => {
-                app.input_mode = InputMode::Normal;
+                app.input_mode = AppInputMode::Normal;
                 app.input_buffer.clear();
             }
             KeyCode::Enter => {

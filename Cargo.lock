@@ -1500,14 +1500,50 @@ name = "probelm"
 version = "0.0.0"
 dependencies = [
  "clap",
- "crossterm",
  "futures-util",
  "inquire",
  "kurir",
- "ratatui",
+ "probelm-adap",
+ "probelm-core",
+ "probelm-tui",
  "reqwest",
  "rmcp",
  "schemars",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "probelm-adap"
+version = "0.0.0"
+dependencies = [
+ "probelm-core",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "probelm-core"
+version = "0.0.0"
+dependencies = [
+ "futures-util",
+ "reqwest",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "probelm-tui"
+version = "0.0.0"
+dependencies = [
+ "crossterm",
+ "probelm-adap",
+ "probelm-core",
+ "ratatui",
  "serde",
  "serde_json",
  "tokio",

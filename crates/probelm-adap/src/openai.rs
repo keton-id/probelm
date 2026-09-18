@@ -1,6 +1,6 @@
-use crate::adap::{AdapterKind, AuthDetails, ProviderAdapter};
-use crate::core::models::{fetch_models, ModelEntry};
-use crate::core::probe::{probe_one, ProbeOpts, ProbeResult};
+use crate::{AdapterKind, AuthDetails, ProviderAdapter};
+use probelm_core::models::{fetch_models, ModelEntry};
+use probelm_core::probe::{probe_one, ProbeOpts, ProbeResult};
 
 /// Adapter for standard OpenAI-compatible gateways (e.g. 9Router, vLLM, LiteLLM, or direct OpenAI).
 #[derive(Debug, Clone)]

@@ -1,7 +1,7 @@
-use crate::adap::oauth::{scan_local_oauth_providers, DetectedOAuthSession};
-use crate::core::config::{Config, FileConfig};
-use crate::core::models::ModelEntry;
-use crate::core::probe::{probe_one, ProbeOpts, ProbeResult};
+use probelm_adap::oauth::{scan_local_oauth_providers, DetectedOAuthSession};
+use probelm_core::config::{Config, FileConfig};
+use probelm_core::models::ModelEntry;
+use probelm_core::probe::{probe_one, ProbeOpts, ProbeResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {

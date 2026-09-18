@@ -1,6 +1,6 @@
-use crate::core::models::Capabilities;
-use crate::core::specs::lookup_spec;
-use crate::tui::app::{App, InputMode, Tab};
+use crate::app::{App, InputMode, Tab};
+use probelm_core::models::Capabilities;
+use probelm_core::specs::lookup_spec;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -242,16 +242,16 @@ fn render_adapters_tab(f: &mut Frame, app: &App, area: Rect) {
     } else {
         for s in &app.detected_sessions {
             let status_badge = match s.status {
-                crate::adap::oauth::SessionStatus::Available => Span::styled(
+                probelm_adap::oauth::SessionStatus::Available => Span::styled(
                     " [ACTIVE] ",
                     Style::default()
                         .fg(Color::Green)
                         .add_modifier(Modifier::BOLD),
                 ),
-                crate::adap::oauth::SessionStatus::Expired => {
+                probelm_adap::oauth::SessionStatus::Expired => {
                     Span::styled(" [EXPIRED] ", Style::default().fg(Color::Red))
                 }
-                crate::adap::oauth::SessionStatus::NotConfigured => {
+                probelm_adap::oauth::SessionStatus::NotConfigured => {
                     Span::styled(" [NOT CONFIGURED] ", Style::default().fg(Color::DarkGray))
                 }
             };
