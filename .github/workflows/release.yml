@@ -152,7 +152,7 @@ jobs:
           PY
           fi
           test "$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')" = "$version"
-          cargo publish --locked
+          cargo publish --locked --allow-dirty
 
   publish-npm:
     needs: publish-assets
@@ -176,7 +176,13 @@ jobs:
         run: npm version "${RELEASE_TAG#v}" --no-git-tag-version --allow-same-version
       - name: Publish probelm to npm
         working-directory: npm
-        run: npm publish --access public
+        run: |
+          version="${RELEASE_TAG#v}"
+          if npm view "@keton-id/probelm@${version}" version >/dev/null 2>&1; then
+            echo "@keton-id/probelm@${version} already published; skipping"
+          else
+            npm publish --access public
+          fi
 
   publish-taps:
     needs: publish-assets
