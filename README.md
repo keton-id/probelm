@@ -2,31 +2,75 @@
 
 `probelm` is a Rust CLI for probing and benchmarking models through an OpenAI-compatible gateway. It measures availability, time to first token (TTFT), total latency, throughput, and model capabilities.
 
-## Quickstart
+## Installation
 
-### macOS and Linux
+### Package Managers
+
+#### Homebrew (macOS / Linux)
+
+```bash
+brew install keton-id/tap/probelm
+```
+
+#### npm / npx
+
+```bash
+# Install globally
+npm install -g @keton-id/probelm
+
+# Or run directly without installing
+npx @keton-id/probelm --help
+```
+
+#### Cargo (crates.io)
+
+```bash
+cargo install probelm
+```
+
+#### Scoop (Windows)
+
+```powershell
+scoop bucket add keton-id https://github.com/keton-id/scoop-bucket
+scoop install probelm
+```
+
+### Standalone Shell Installer
+
+#### macOS and Linux
 
 ```bash
 curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/keton-id/probelm/master/script/install.sh | bash
-probelm init --global -y
-probelm test
 ```
 
-To install from a checkout instead:
+To install from a local checkout:
 
 ```bash
 ./script/install.sh
 ```
 
-### Windows PowerShell
+#### Windows PowerShell
 
 ```powershell
 irm https://raw.githubusercontent.com/keton-id/probelm/master/script/install.ps1 | iex
-probelm init --global -y
-probelm test
 ```
 
 The installers select the published binary for the current operating system and architecture. `PROBELM_VERSION` or the PowerShell `-Version` parameter can pin a release.
+
+### Build from Source
+
+```bash
+git clone https://github.com/keton-id/probelm.git
+cd probelm
+cargo build --release
+```
+
+## Quickstart
+
+```bash
+probelm init --global -y
+probelm test
+```
 
 ## Commands
 

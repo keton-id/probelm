@@ -2,31 +2,75 @@
 
 `probelm` adalah CLI Rust untuk melakukan probe dan benchmarking model melalui gateway yang kompatibel dengan OpenAI. Tool ini mengukur ketersediaan, *time to first token* (TTFT), latensi total, throughput, dan kapabilitas model.
 
-## Quickstart
+## Instalasi
 
-### macOS dan Linux
+### Package Manager
+
+#### Homebrew (macOS / Linux)
+
+```bash
+brew install keton-id/tap/probelm
+```
+
+#### npm / npx
+
+```bash
+# Instal secara global
+npm install -g @keton-id/probelm
+
+# Atau jalankan langsung via npx tanpa instalasi permanen
+npx @keton-id/probelm --help
+```
+
+#### Cargo (crates.io)
+
+```bash
+cargo install probelm
+```
+
+#### Scoop (Windows)
+
+```powershell
+scoop bucket add keton-id https://github.com/keton-id/scoop-bucket
+scoop install probelm
+```
+
+### Standalone Shell Installer
+
+#### macOS dan Linux
 
 ```bash
 curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/keton-id/probelm/master/script/install.sh | bash
-probelm init --global -y
-probelm test
 ```
 
-Instalasi dari checkout:
+Instalasi dari checkout lokal:
 
 ```bash
 ./script/install.sh
 ```
 
-### Windows PowerShell
+#### Windows PowerShell
 
 ```powershell
 irm https://raw.githubusercontent.com/keton-id/probelm/master/script/install.ps1 | iex
-probelm init --global -y
-probelm test
 ```
 
 Installer memilih binary yang sesuai dengan sistem operasi dan arsitektur. Versi dapat dipatok menggunakan `PROBELM_VERSION` atau parameter PowerShell `-Version`.
+
+### Build dari Source
+
+```bash
+git clone https://github.com/keton-id/probelm.git
+cd probelm
+cargo build --release
+```
+
+## Quickstart
+
+```bash
+probelm init --global -y
+probelm test
+```
 
 ## Perintah
 
