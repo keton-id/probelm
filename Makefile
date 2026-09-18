@@ -25,7 +25,7 @@ build: ## Build release binaries
 	$(CARGO) build --release --locked
 
 package: ## Validate the crates.io package contents
-	$(CARGO) package --locked --allow-dirty
+	$(CARGO) package --workspace --no-verify --locked --allow-dirty
 
 npm-pack: ## Validate the npm package tarball
 	cd npm && npm pack --dry-run

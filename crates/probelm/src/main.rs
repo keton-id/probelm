@@ -1,8 +1,16 @@
-mod config;
-mod mcp;
-mod models;
-mod probe;
-mod specs;
+pub mod mcp;
+pub mod tty;
+
+// Re-exports from workspace crates
+pub use probelm_adap as adap;
+pub use probelm_core as core;
+pub use probelm_tui as tui;
+
+// Backward-compatible re-exports
+pub use probelm_core::config;
+pub use probelm_core::models;
+pub use probelm_core::probe;
+pub use probelm_core::specs;
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -41,6 +49,11 @@ enum Command {
     SyncSpecs,
     /// Serve the MCP API or install it into an agent harness.
     Mcp(McpArgs),
+    /// Interactive full-screen TUI dashboard to explore, benchmark, and manage models.
+    #[command(alias = "manage", alias = "dashboard")]
+    Tui(TuiArgs),
+    /// Single-update TTY wizard or quick configuration adjustment.
+    Config(ConfigArgs),
 }
 
 #[derive(clap::Args, Debug)]
@@ -175,6 +188,32 @@ enum McpCommand {
     },
 }
 
+#[derive(clap::Args, Debug, Clone)]
+struct TuiArgs {
+    /// JSON config file
+    #[arg(short, long, default_value = "config.json")]
+    config: String,
+}
+
+#[derive(clap::Args, Debug, Clone)]
+struct ConfigArgs {
+    /// JSON config file
+    #[arg(short, long, default_value = "config.json")]
+    config: String,
+    /// Update Gateway base URL
+    #[arg(long)]
+    set_url: Option<String>,
+    /// Update Gateway API key
+    #[arg(long)]
+    set_key: Option<String>,
+    /// Add model ID to configuration
+    #[arg(long)]
+    add_model: Option<String>,
+    /// Remove model ID from configuration
+    #[arg(long)]
+    remove_model: Option<String>,
+}
+
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
@@ -184,13 +223,107 @@ async fn main() {
         Some(Command::Test(a)) => cmd_test(a).await,
         Some(Command::SyncSpecs) => cmd_sync_specs().await,
         Some(Command::Mcp(args)) => cmd_mcp(args).await,
+        Some(Command::Tui(a)) => cmd_tui(a).await,
+        Some(Command::Config(a)) => cmd_config(a),
         None => {
-            eprintln!("usage: probelm <init|test|list|sync-specs|mcp> [options] — see --help");
+            eprintln!(
+                "usage: probelm <init|test|list|sync-specs|mcp|tui|config> [options] — see --help"
+            );
             eprintln!("aliases for 'test': probe, check, bench, run");
+            eprintln!("aliases for 'tui': manage, dashboard");
             2
         }
     };
     std::process::exit(code);
+}
+
+async fn cmd_tui(args: &TuiArgs) -> i32 {
+    let cfg = match config::Config::load(&args.config) {
+        Ok(c) => c,
+        Err(_) => {
+            let base_url = std::env::var("ROUTER_URL")
+                .unwrap_or_else(|_| "http://localhost:20128".to_string())
+                .trim_end_matches('/')
+                .to_string();
+            let api_key = std::env::var("ROUTER_KEY")
+                .ok()
+                .or_else(config::detect_local_9router_key)
+                .unwrap_or_default();
+            config::Config {
+                base_url,
+                api_key,
+                models: Vec::new(),
+                default_prompt: "Reply with exactly: OK".to_string(),
+                prompts: HashMap::new(),
+                max_tokens: 64,
+                temperature: 0.0,
+                timeout_secs: 15,
+                config_path: None,
+            }
+        }
+    };
+
+    let discovered = models::fetch_models(&cfg.base_url, &cfg.api_key, 5)
+        .await
+        .unwrap_or_default();
+    let app = tui::app::App::new(cfg, args.config.clone(), discovered);
+    if let Err(e) = tui::run_tui(app).await {
+        eprintln!("TUI error: {e}");
+        return 1;
+    }
+    0
+}
+
+fn cmd_config(args: &ConfigArgs) -> i32 {
+    if let Some(ref url) = args.set_url {
+        match tty::update_config_value(&args.config, "url", url) {
+            Ok(msg) => println!("✓ {msg}"),
+            Err(e) => {
+                eprintln!("ERROR: {e}");
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    if let Some(ref key) = args.set_key {
+        match tty::update_config_value(&args.config, "key", key) {
+            Ok(msg) => println!("✓ {msg}"),
+            Err(e) => {
+                eprintln!("ERROR: {e}");
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    if let Some(ref m) = args.add_model {
+        match tty::update_config_value(&args.config, "add-model", m) {
+            Ok(msg) => println!("✓ {msg}"),
+            Err(e) => {
+                eprintln!("ERROR: {e}");
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    if let Some(ref m) = args.remove_model {
+        match tty::update_config_value(&args.config, "remove-model", m) {
+            Ok(msg) => println!("✓ {msg}"),
+            Err(e) => {
+                eprintln!("ERROR: {e}");
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    if let Err(e) = tty::run_single_update_wizard(&args.config) {
+        eprintln!("ERROR: {e}");
+        return 1;
+    }
+    0
 }
 
 async fn cmd_mcp(args: &McpArgs) -> i32 {
@@ -253,26 +386,7 @@ async fn cmd_sync_specs() -> i32 {
         }
     }
 }
-
-fn prompt_line(prompt: &str, default: Option<&str>) -> String {
-    if let Some(def) = default {
-        print!("{prompt} [{def}]: ");
-    } else {
-        print!("{prompt}: ");
-    }
-    let _ = io::stdout().flush();
-    let mut line = String::new();
-    if io::stdin().read_line(&mut line).is_ok() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            default.unwrap_or("").to_string()
-        } else {
-            trimmed.to_string()
-        }
-    } else {
-        default.unwrap_or("").to_string()
-    }
-}
+use crate::tty::prompt_input;
 
 fn mask_key(k: &str) -> String {
     if k.len() <= 8 {
@@ -299,7 +413,7 @@ async fn cmd_init(args: &InitArgs) -> i32 {
         .unwrap_or_else(|| "http://localhost:20128".to_string());
 
     let base_url = if interactive && args.url.is_none() {
-        prompt_line("? 9Router Gateway URL", Some(&default_url))
+        prompt_input("? 9Router Gateway URL", Some(&default_url))
     } else {
         default_url
     };
@@ -313,9 +427,9 @@ async fn cmd_init(args: &InitArgs) -> i32 {
         if let Some(ref dk) = detected_key {
             let masked = mask_key(dk);
             let prompt_text = format!("? 9Router API Key (detected: {masked})");
-            prompt_line(&prompt_text, Some(dk))
+            prompt_input(&prompt_text, Some(dk))
         } else {
-            let input = prompt_line("? 9Router API Key (e.g. sk-...)", None);
+            let input = prompt_input("? 9Router API Key (e.g. sk-...)", None);
             if input.is_empty() {
                 eprintln!("ERROR: API Key cannot be empty.");
                 return 2;
@@ -367,7 +481,7 @@ async fn cmd_init(args: &InitArgs) -> i32 {
                 let filter_prompt = format!(
                     "? Filter models to include ('{default_prefix}', 'all', or comma-separated)"
                 );
-                let filter_input = prompt_line(&filter_prompt, Some(default_prefix));
+                let filter_input = prompt_input(&filter_prompt, Some(default_prefix));
 
                 let matched: Vec<String> = if filter_input == "all" {
                     entries.iter().map(|m| m.id.clone()).collect()
@@ -446,7 +560,7 @@ async fn cmd_init(args: &InitArgs) -> i32 {
         println!("Save target options:");
         println!("  [1] Local project file (./config.json)");
         println!("  [2] Global user config (~/.config/probelm/config.json)");
-        let choice = prompt_line("? Choose save location [1/2]", Some("1"));
+        let choice = prompt_input("? Choose save location [1/2]", Some("1"));
         if choice == "2" {
             let home = std::env::var_os("HOME").expect("HOME directory not found");
             Path::new(&home)
@@ -462,7 +576,7 @@ async fn cmd_init(args: &InitArgs) -> i32 {
 
     // Check overwrite
     if target_path.exists() && !args.force && interactive {
-        let confirm = prompt_line(
+        let confirm = prompt_input(
             &format!(
                 "! File '{}' already exists. Overwrite? (y/N)",
                 target_path.display()

@@ -9,7 +9,22 @@
       "extra-files": [
         {
           "type": "toml",
-          "path": "Cargo.toml",
+          "path": "crates/probelm/Cargo.toml",
+          "jsonpath": "$.package.version"
+        },
+        {
+          "type": "toml",
+          "path": "crates/probelm-core/Cargo.toml",
+          "jsonpath": "$.package.version"
+        },
+        {
+          "type": "toml",
+          "path": "crates/probelm-adap/Cargo.toml",
+          "jsonpath": "$.package.version"
+        },
+        {
+          "type": "toml",
+          "path": "crates/probelm-tui/Cargo.toml",
           "jsonpath": "$.package.version"
         },
         {

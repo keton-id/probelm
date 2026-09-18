@@ -26,7 +26,7 @@ jobs:
       - run: cargo clippy --all-targets --all-features -- -D warnings
       - run: cargo check --all-targets --all-features --locked
       - run: cargo test --all-targets --all-features --locked
-      - run: cargo package --locked --allow-dirty
+      - run: cargo package --workspace --no-verify --locked --allow-dirty
 
   npm:
     name: npm package checks

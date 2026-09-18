@@ -7,3 +7,4 @@ config.json
 .forgeguard/
 npm/vendor/
 npm/*.tgz
+.mcp.json
