@@ -1,3 +1,4 @@
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -12,7 +13,7 @@ pub struct ModelEntry {
     pub capabilities: Capabilities,
 }
 
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, JsonSchema, Serialize)]
 #[allow(non_snake_case)]
 pub struct Capabilities {
     pub vision: bool,

@@ -39,6 +39,28 @@ probelm sync-specs
 
 `test` also accepts the aliases `probe`, `check`, `bench`, and `run`.
 
+## MCP for harnesses
+
+`probelm` can run as a local MCP server over stdio. Register it with an
+agent harness through Kurir:
+
+```bash
+# Interactive TTY installer
+probelm mcp install
+
+# Non-interactive registration
+probelm mcp install --client claude-code
+probelm mcp install --client codex --project
+
+# The command launched by the harness
+probelm mcp serve
+```
+
+The interactive installer requires a real TTY so it can present the harness
+selection menu. Pass `--client` in automation. Registration writes a stdio
+entry that launches `probelm mcp serve`; the server reads the same gateway
+configuration used by the CLI and keeps protocol output on stdout.
+
 ### Initialize configuration
 
 ```bash

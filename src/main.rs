@@ -1,4 +1,5 @@
 mod config;
+mod mcp;
 mod models;
 mod probe;
 mod specs;
@@ -38,6 +39,8 @@ enum Command {
     /// Sync authoritative model specifications database from LiteLLM / Community source.
     #[command(alias = "sync")]
     SyncSpecs,
+    /// Serve the MCP API or install it into an agent harness.
+    Mcp(McpArgs),
 }
 
 #[derive(clap::Args, Debug)]
@@ -138,6 +141,40 @@ struct TestArgs {
     jobs: usize,
 }
 
+#[derive(clap::Args, Debug)]
+struct McpArgs {
+    #[command(subcommand)]
+    command: McpCommand,
+}
+
+#[derive(Subcommand, Debug)]
+enum McpCommand {
+    /// Serve MCP over stdio for a harness to launch.
+    Serve {
+        /// JSON config file.
+        #[arg(short, long, default_value = "config.json")]
+        config: String,
+    },
+    /// Register the stdio server with an agent harness.
+    Install {
+        /// Harness id; omit to choose interactively in a TTY.
+        #[arg(long)]
+        client: Option<String>,
+        /// Name exposed to the harness.
+        #[arg(long, default_value = "probelm")]
+        name: String,
+        /// Register in the project instead of the user configuration.
+        #[arg(long)]
+        project: bool,
+        /// Replace an existing conflicting entry.
+        #[arg(long)]
+        force: bool,
+        /// Preview the registration without writing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+}
+
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
@@ -146,13 +183,61 @@ async fn main() {
         Some(Command::List(a)) => cmd_list(a).await,
         Some(Command::Test(a)) => cmd_test(a).await,
         Some(Command::SyncSpecs) => cmd_sync_specs().await,
+        Some(Command::Mcp(args)) => cmd_mcp(args).await,
         None => {
-            eprintln!("usage: probelm <init|test|list|sync-specs> [options] — see --help");
+            eprintln!("usage: probelm <init|test|list|sync-specs|mcp> [options] — see --help");
             eprintln!("aliases for 'test': probe, check, bench, run");
             2
         }
     };
     std::process::exit(code);
+}
+
+async fn cmd_mcp(args: &McpArgs) -> i32 {
+    match &args.command {
+        McpCommand::Serve { config } => {
+            let config = match config::Config::load(config) {
+                Ok(config) => config,
+                Err(error) => {
+                    eprintln!("ERROR: {error}");
+                    return 2;
+                }
+            };
+            match mcp::ProbelmServer::new(config).serve_stdio().await {
+                Ok(()) => 0,
+                Err(error) => {
+                    eprintln!("ERROR: MCP server: {error}");
+                    2
+                }
+            }
+        }
+        McpCommand::Install {
+            client,
+            name,
+            project,
+            force,
+            dry_run,
+        } => match mcp::install_harness(client.as_deref(), name, *project, *force, *dry_run) {
+            Ok(result) => {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&serde_json::json!({
+                        "harness": result.harness,
+                        "name": result.name,
+                        "target": result.target,
+                        "changed": result.changed,
+                        "action": result.action,
+                    }))
+                    .expect("MCP registration result is serializable")
+                );
+                0
+            }
+            Err(error) => {
+                eprintln!("ERROR: MCP install: {error}");
+                2
+            }
+        },
+    }
 }
 
 async fn cmd_sync_specs() -> i32 {

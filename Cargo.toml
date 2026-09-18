@@ -25,3 +25,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 clap = { version = "4", features = ["derive"] }
 futures-util = "0.3"
+kurir = "0.2"
+inquire = "0.9"
+rmcp = { version = "3.4", default-features = false, features = ["macros", "schemars", "server", "transport-io"] }
+schemars = "1"
