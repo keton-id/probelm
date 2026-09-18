@@ -31,48 +31,49 @@ pub fn update_config_value(config_path: &str, field: &str, value: &str) -> Resul
         FileConfig::default()
     };
 
-    let msg =
-        match field {
-            "url" | "base-url" => {
-                let mut ep = file_config
-                    .endpoint
-                    .unwrap_or(crate::core::config::EndpointCfg {
-                        base_url: None,
-                        api_key: None,
-                    });
-                ep.base_url = Some(value.trim_end_matches('/').to_string());
-                file_config.endpoint = Some(ep);
-                format!("Updated base_url to '{value}'")
+    let msg = match field {
+        "url" | "base-url" => {
+            let mut ep = file_config
+                .endpoint
+                .unwrap_or(crate::core::config::EndpointCfg {
+                    base_url: None,
+                    api_key: None,
+                });
+            ep.base_url = Some(value.trim_end_matches('/').to_string());
+            file_config.endpoint = Some(ep);
+            format!("Updated base_url to '{value}'")
+        }
+        "key" | "api-key" => {
+            let mut ep = file_config
+                .endpoint
+                .unwrap_or(crate::core::config::EndpointCfg {
+                    base_url: None,
+                    api_key: None,
+                });
+            ep.api_key = Some(value.to_string());
+            file_config.endpoint = Some(ep);
+            "Updated api_key".to_string()
+        }
+        "add-model" => {
+            let mut models = file_config.models.unwrap_or_default();
+            if !models.contains(&value.to_string()) {
+                models.push(value.to_string());
             }
-            "key" | "api-key" => {
-                let mut ep = file_config
-                    .endpoint
-                    .unwrap_or(crate::core::config::EndpointCfg {
-                        base_url: None,
-                        api_key: None,
-                    });
-                ep.api_key = Some(value.to_string());
-                file_config.endpoint = Some(ep);
-                "Updated api_key".to_string()
-            }
-            "add-model" => {
-                let mut models = file_config.models.unwrap_or_default();
-                if !models.contains(&value.to_string()) {
-                    models.push(value.to_string());
-                }
-                file_config.models = Some(models);
-                format!("Added model '{value}' to config")
-            }
-            "remove-model" => {
-                let mut models = file_config.models.unwrap_or_default();
-                models.retain(|m| m != value);
-                file_config.models = Some(models);
-                format!("Removed model '{value}' from config")
-            }
-            _ => return Err(format!(
+            file_config.models = Some(models);
+            format!("Added model '{value}' to config")
+        }
+        "remove-model" => {
+            let mut models = file_config.models.unwrap_or_default();
+            models.retain(|m| m != value);
+            file_config.models = Some(models);
+            format!("Removed model '{value}' from config")
+        }
+        _ => {
+            return Err(format!(
                 "Unknown configuration field '{field}'. Valid: url, key, add-model, remove-model"
-            )),
-        };
+            ))
+        }
+    };
 
     let json = serde_json::to_string_pretty(&file_config).map_err(|e| format!("serialize: {e}"))?;
     std::fs::write(p, json).map_err(|e| format!("write {}: {e}", p.display()))?;
