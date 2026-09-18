@@ -1,3 +1,4 @@
+pub mod adap;
 pub mod core;
 pub mod mcp;
 
