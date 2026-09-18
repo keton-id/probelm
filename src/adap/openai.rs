@@ -60,3 +60,21 @@ impl ProviderAdapter for OpenAiAdapter {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_openai_adapter_metadata() {
+        let adapter = OpenAiAdapter::new(
+            "http://localhost:20128/".to_string(),
+            "sk-1234567890abcdef".to_string(),
+        );
+        assert_eq!(adapter.id(), "openai-compatible");
+        assert_eq!(adapter.base_url, "http://localhost:20128");
+        let auth = adapter.auth_details();
+        assert!(auth.active);
+        assert!(auth.identifier.contains("..."));
+    }
+}

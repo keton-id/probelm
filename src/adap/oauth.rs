@@ -39,7 +39,11 @@ pub fn scan_local_oauth_providers() -> Vec<DetectedOAuthSession> {
         if claude_config.exists() {
             if let Ok(content) = std::fs::read_to_string(&claude_config) {
                 if let Ok(v) = serde_json::from_str::<serde_json::Value>(&content) {
-                    if let Some(email) = v.get("oauthAccount").and_then(|o| o.get("emailAddress")).and_then(|e| e.as_str()) {
+                    if let Some(email) = v
+                        .get("oauthAccount")
+                        .and_then(|o| o.get("emailAddress"))
+                        .and_then(|e| e.as_str())
+                    {
                         account = Some(email.to_string());
                         available = true;
                     }
@@ -54,15 +58,26 @@ pub fn scan_local_oauth_providers() -> Vec<DetectedOAuthSession> {
         sessions.push(DetectedOAuthSession {
             provider_id: "claude-code".to_string(),
             display_name: "Claude Code OAuth Session".to_string(),
-            status: if available { SessionStatus::Available } else { SessionStatus::NotConfigured },
+            status: if available {
+                SessionStatus::Available
+            } else {
+                SessionStatus::NotConfigured
+            },
             account,
             token_preview: preview,
-            source_path: if claude_config.exists() { Some(claude_config) } else { Some(claude_dir) },
+            source_path: if claude_config.exists() {
+                Some(claude_config)
+            } else {
+                Some(claude_dir)
+            },
         });
     }
 
     // 2. GitHub Copilot session check
-    let copilot_config = home.join(".config").join("github-copilot").join("hosts.json");
+    let copilot_config = home
+        .join(".config")
+        .join("github-copilot")
+        .join("hosts.json");
     let gh_hosts = home.join(".config").join("gh").join("hosts.yml");
     if copilot_config.exists() || gh_hosts.exists() {
         let mut account = None;
@@ -91,10 +106,18 @@ pub fn scan_local_oauth_providers() -> Vec<DetectedOAuthSession> {
         sessions.push(DetectedOAuthSession {
             provider_id: "github-copilot".to_string(),
             display_name: "GitHub Copilot / Codex OAuth".to_string(),
-            status: if available { SessionStatus::Available } else { SessionStatus::NotConfigured },
+            status: if available {
+                SessionStatus::Available
+            } else {
+                SessionStatus::NotConfigured
+            },
             account,
             token_preview: preview,
-            source_path: if copilot_config.exists() { Some(copilot_config) } else { Some(gh_hosts) },
+            source_path: if copilot_config.exists() {
+                Some(copilot_config)
+            } else {
+                Some(gh_hosts)
+            },
         });
     }
 
