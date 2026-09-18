@@ -1,8 +1,11 @@
-mod config;
-mod mcp;
-mod models;
-mod probe;
-mod specs;
+pub mod core;
+pub mod mcp;
+
+// Backward-compatible re-exports
+pub use crate::core::config;
+pub use crate::core::models;
+pub use crate::core::probe;
+pub use crate::core::specs;
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
