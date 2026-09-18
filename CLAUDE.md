@@ -1,6 +1,6 @@
 # probelm
 
-`probelm` is the public command, crate, and npm package name. The repository is a Rust CLI for probing and benchmarking models through an OpenAI-compatible gateway.
+`probelm` is the public command and crate name. The scoped npm package is `@keton-id/probelm`. The repository is a Rust CLI for probing and benchmarking models through an OpenAI-compatible gateway.
 
 For code changes, use `/forgeguard-engineering`.
 
@@ -8,7 +8,7 @@ For code changes, use `/forgeguard-engineering`.
 
 - Primary command and binary: `probelm`.
 - Crate: `probelm`.
-- npm package: `probelm`.
+- npm package: `@keton-id/probelm`.
 - A legacy executable remains available for compatibility with existing users. Do not advertise it in new documentation, examples, installers, package metadata, or release notes.
 - Both command names are built from the same `src/main.rs`; no behavior split is required.
 - Keep command examples in `README.md`, `README_ID.md`, `npm/README.md`, and release documentation on `probelm`.
@@ -51,13 +51,13 @@ Release Please owns the version. Do not bump `Cargo.toml` or create tags manuall
    - `probelm-linux-aarch64.tar.gz`
    - `probelm-linux-x86_64.tar.gz`
 7. The workflow uploads `SHA256SUMS` and one `<asset>.sha256` beside every archive before distribution jobs run.
-8. Sibling distribution jobs publish the crate to crates.io through OIDC, publish npm package `probelm` through npm Trusted Publishing/OIDC, and update `keton-id/homebrew-tap` plus `keton-id/scoop-bucket`.
+8. Sibling distribution jobs publish the crate to crates.io through OIDC, publish npm package `@keton-id/probelm` through npm Trusted Publishing/OIDC, and update `keton-id/homebrew-tap` plus `keton-id/scoop-bucket`.
 
 Required GitHub configuration:
 
 - `RELEASE_PLEASE_TOKEN`: token allowing Release Please to open/update its PR and create the release.
 - `TAP_PUBLISH_TOKEN`: write access to `keton-id/homebrew-tap` and `keton-id/scoop-bucket`.
-- GitHub environment `Release` trusted by npm package `probelm` and crates.io crate `probelm`.
+- GitHub environment `Release` trusted by npm package `@keton-id/probelm` and crates.io crate `probelm`.
 - npm Trusted Publisher configured for this repository and `.github/workflows/release.yml`.
 - crates.io Trusted Publisher configured for this repository and `.github/workflows/release.yml`.
 
