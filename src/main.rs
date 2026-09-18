@@ -1,6 +1,8 @@
 pub mod adap;
 pub mod core;
 pub mod mcp;
+pub mod tty;
+pub mod tui;
 
 // Backward-compatible re-exports
 pub use crate::core::config;
@@ -45,6 +47,11 @@ enum Command {
     SyncSpecs,
     /// Serve the MCP API or install it into an agent harness.
     Mcp(McpArgs),
+    /// Interactive full-screen TUI dashboard to explore, benchmark, and manage models.
+    #[command(alias = "manage", alias = "dashboard")]
+    Tui(TuiArgs),
+    /// Single-update TTY wizard or quick configuration adjustment.
+    Config(ConfigArgs),
 }
 
 #[derive(clap::Args, Debug)]
@@ -179,6 +186,32 @@ enum McpCommand {
     },
 }
 
+#[derive(clap::Args, Debug, Clone)]
+struct TuiArgs {
+    /// JSON config file
+    #[arg(short, long, default_value = "config.json")]
+    config: String,
+}
+
+#[derive(clap::Args, Debug, Clone)]
+struct ConfigArgs {
+    /// JSON config file
+    #[arg(short, long, default_value = "config.json")]
+    config: String,
+    /// Update Gateway base URL
+    #[arg(long)]
+    set_url: Option<String>,
+    /// Update Gateway API key
+    #[arg(long)]
+    set_key: Option<String>,
+    /// Add model ID to configuration
+    #[arg(long)]
+    add_model: Option<String>,
+    /// Remove model ID from configuration
+    #[arg(long)]
+    remove_model: Option<String>,
+}
+
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
@@ -188,13 +221,107 @@ async fn main() {
         Some(Command::Test(a)) => cmd_test(a).await,
         Some(Command::SyncSpecs) => cmd_sync_specs().await,
         Some(Command::Mcp(args)) => cmd_mcp(args).await,
+        Some(Command::Tui(a)) => cmd_tui(a).await,
+        Some(Command::Config(a)) => cmd_config(a),
         None => {
-            eprintln!("usage: probelm <init|test|list|sync-specs|mcp> [options] — see --help");
+            eprintln!(
+                "usage: probelm <init|test|list|sync-specs|mcp|tui|config> [options] — see --help"
+            );
             eprintln!("aliases for 'test': probe, check, bench, run");
+            eprintln!("aliases for 'tui': manage, dashboard");
             2
         }
     };
     std::process::exit(code);
+}
+
+async fn cmd_tui(args: &TuiArgs) -> i32 {
+    let cfg = match config::Config::load(&args.config) {
+        Ok(c) => c,
+        Err(_) => {
+            let base_url = std::env::var("ROUTER_URL")
+                .unwrap_or_else(|_| "http://localhost:20128".to_string())
+                .trim_end_matches('/')
+                .to_string();
+            let api_key = std::env::var("ROUTER_KEY")
+                .ok()
+                .or_else(config::detect_local_9router_key)
+                .unwrap_or_default();
+            config::Config {
+                base_url,
+                api_key,
+                models: Vec::new(),
+                default_prompt: "Reply with exactly: OK".to_string(),
+                prompts: HashMap::new(),
+                max_tokens: 64,
+                temperature: 0.0,
+                timeout_secs: 15,
+                config_path: None,
+            }
+        }
+    };
+
+    let discovered = models::fetch_models(&cfg.base_url, &cfg.api_key, 5)
+        .await
+        .unwrap_or_default();
+    let app = tui::app::App::new(cfg, args.config.clone(), discovered);
+    if let Err(e) = tui::run_tui(app).await {
+        eprintln!("TUI error: {e}");
+        return 1;
+    }
+    0
+}
+
+fn cmd_config(args: &ConfigArgs) -> i32 {
+    if let Some(ref url) = args.set_url {
+        match tty::update_config_value(&args.config, "url", url) {
+            Ok(msg) => println!("✓ {msg}"),
+            Err(e) => {
+                eprintln!("ERROR: {e}");
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    if let Some(ref key) = args.set_key {
+        match tty::update_config_value(&args.config, "key", key) {
+            Ok(msg) => println!("✓ {msg}"),
+            Err(e) => {
+                eprintln!("ERROR: {e}");
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    if let Some(ref m) = args.add_model {
+        match tty::update_config_value(&args.config, "add-model", m) {
+            Ok(msg) => println!("✓ {msg}"),
+            Err(e) => {
+                eprintln!("ERROR: {e}");
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    if let Some(ref m) = args.remove_model {
+        match tty::update_config_value(&args.config, "remove-model", m) {
+            Ok(msg) => println!("✓ {msg}"),
+            Err(e) => {
+                eprintln!("ERROR: {e}");
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    if let Err(e) = tty::run_single_update_wizard(&args.config) {
+        eprintln!("ERROR: {e}");
+        return 1;
+    }
+    0
 }
 
 async fn cmd_mcp(args: &McpArgs) -> i32 {
