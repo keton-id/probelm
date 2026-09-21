@@ -4,6 +4,22 @@ All notable changes to `probelm` are documented here.
 
 The file is maintained by Release Please from conventional commits. Do not edit release sections or bump versions by hand.
 
+## [1.1.0](https://github.com/keton-id/probelm/compare/v1.0.0...v1.1.0) (2026-09-21)
+
+
+### Features
+
+* add --reasoning-effort flag and reasoningEffort config option ([d976c4a](https://github.com/keton-id/probelm/commit/d976c4a2323dd37ff4829f7e17a1226fac99a20c))
+* add --reasoning-effort flag and reasoningEffort config option ([0d54bfa](https://github.com/keton-id/probelm/commit/0d54bfad0d4d9a9590002ce42e49f4099b14317d))
+
+
+### Bug Fixes
+
+* make release recovery rerunnable ([9f292f3](https://github.com/keton-id/probelm/commit/9f292f31eb0b7b1119413d1be009057eabd7f647))
+* recover release distribution publishing ([5f29615](https://github.com/keton-id/probelm/commit/5f296155fbaca158f48b3e13f5bb5bc61073e7ab))
+* **release:** make recovery reruns idempotent ([6dbe1dd](https://github.com/keton-id/probelm/commit/6dbe1dd441f929baf24650f3a519410e29689bc0))
+* **release:** recover registry and tap publishing ([94254fe](https://github.com/keton-id/probelm/commit/94254feb0227050f7b55426ef41a6d9d577d7ad0))
+
 ## 1.0.0 (2026-09-18)
 
 
