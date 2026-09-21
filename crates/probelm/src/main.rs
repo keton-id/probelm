@@ -152,6 +152,11 @@ struct TestArgs {
     /// Number of concurrent test workers (default 1)
     #[arg(short = 'j', long = "jobs", default_value_t = 1)]
     jobs: usize,
+    /// Reasoning effort level sent to the API (none, low, medium, high).
+    /// Overrides reasoningEffort in config. Use "low" for faster probes on
+    /// models with mandatory reasoning (e.g. Gemini 3.x flash).
+    #[arg(long = "reasoning-effort", value_name = "EFFORT")]
+    reasoning_effort: Option<String>,
 }
 
 #[derive(clap::Args, Debug)]
@@ -258,6 +263,7 @@ async fn cmd_tui(args: &TuiArgs) -> i32 {
                 max_tokens: 64,
                 temperature: 0.0,
                 timeout_secs: 15,
+                reasoning_effort: None,
                 config_path: None,
             }
         }
@@ -601,6 +607,7 @@ async fn cmd_init(args: &InitArgs) -> i32 {
         max_tokens: Some(64),
         temperature: Some(0.0),
         timeout_seconds: Some(120),
+        reasoning_effort: None,
     };
 
     // Write file
@@ -824,6 +831,10 @@ async fn cmd_test(args: &TestArgs) -> i32 {
         timeout_secs: cfg.timeout_secs,
         do_ping,
         do_latency,
+        reasoning_effort: args
+            .reasoning_effort
+            .clone()
+            .or_else(|| cfg.reasoning_effort.clone()),
     };
 
     // Concurrency

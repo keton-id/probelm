@@ -103,6 +103,7 @@ pub struct ProbeOpts {
     pub timeout_secs: u64,
     pub do_ping: bool,
     pub do_latency: bool,
+    pub reasoning_effort: Option<String>,
 }
 
 fn client(timeout: u64) -> Result<reqwest::Client, String> {
@@ -119,6 +120,7 @@ fn chat_body(
     max_tokens: u32,
     temp: f64,
     stream: bool,
+    reasoning_effort: Option<&str>,
 ) -> serde_json::Value {
     let mut body = serde_json::json!({
         "model": model,
@@ -127,6 +129,9 @@ fn chat_body(
         "temperature": temp,
         "stream": stream,
     });
+    if let Some(effort) = reasoning_effort {
+        body["reasoning_effort"] = serde_json::json!(effort);
+    }
     if stream {
         body["stream_options"] = serde_json::json!({
             "include_usage": true
@@ -148,6 +153,7 @@ async fn ping(host: &str, key: &str, opts: &ProbeOpts) -> Result<PingOutcome, St
             opts.max_tokens,
             opts.temperature,
             false,
+            opts.reasoning_effort.as_deref(),
         ))
         .send()
         .await
@@ -174,6 +180,7 @@ async fn latency(host: &str, key: &str, opts: &ProbeOpts) -> Result<LatencyOutco
             opts.max_tokens,
             opts.temperature,
             true,
+            opts.reasoning_effort.as_deref(),
         ))
         .send()
         .await
