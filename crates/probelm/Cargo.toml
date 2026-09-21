@@ -20,9 +20,9 @@ name = "mtest"
 path = "src/main.rs"
 
 [dependencies]
-probelm-core = { version = "0.0.0", path = "../probelm-core" }
-probelm-adap = { version = "0.0.0", path = "../probelm-adap" }
-probelm-tui = { version = "0.0.0", path = "../probelm-tui" }
+probelm-core = { version = "1.1.0", path = "../probelm-core" }
+probelm-adap = { version = "1.1.0", path = "../probelm-adap" }
+probelm-tui = { version = "1.1.0", path = "../probelm-tui" }
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls"], default-features = false }
 serde = { version = "1", features = ["derive"] }
