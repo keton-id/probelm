@@ -1,6 +1,6 @@
 [package]
 name = "probelm-adap"
-version = "0.0.0"
+version = "1.1.0"
 edition = "2021"
 description = "Provider adapters and connectors for probelm"
 license = "MIT"
@@ -11,7 +11,7 @@ keywords = ["llm", "adapter", "openai", "oauth"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-probelm-core = { version = "0.0.0", path = "../probelm-core" }
+probelm-core = { version = "1.1.0", path = "../probelm-core" }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

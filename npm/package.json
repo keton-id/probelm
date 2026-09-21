@@ -1,6 +1,6 @@
 {
   "name": "@keton-id/probelm",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Probe and benchmark models through an OpenAI-compatible gateway",
   "homepage": "https://github.com/keton-id/probelm",
   "repository": {

@@ -28,6 +28,36 @@
           "jsonpath": "$.package.version"
         },
         {
+          "type": "toml",
+          "path": "crates/probelm/Cargo.toml",
+          "jsonpath": "$.dependencies.probelm-core.version"
+        },
+        {
+          "type": "toml",
+          "path": "crates/probelm/Cargo.toml",
+          "jsonpath": "$.dependencies.probelm-adap.version"
+        },
+        {
+          "type": "toml",
+          "path": "crates/probelm/Cargo.toml",
+          "jsonpath": "$.dependencies.probelm-tui.version"
+        },
+        {
+          "type": "toml",
+          "path": "crates/probelm-adap/Cargo.toml",
+          "jsonpath": "$.dependencies.probelm-core.version"
+        },
+        {
+          "type": "toml",
+          "path": "crates/probelm-tui/Cargo.toml",
+          "jsonpath": "$.dependencies.probelm-core.version"
+        },
+        {
+          "type": "toml",
+          "path": "crates/probelm-tui/Cargo.toml",
+          "jsonpath": "$.dependencies.probelm-adap.version"
+        },
+        {
           "type": "json",
           "path": "npm/package.json",
           "jsonpath": "$.version"
