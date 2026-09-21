@@ -174,6 +174,7 @@ impl ProbelmServer {
                 timeout_secs: self.config.timeout_secs,
                 do_ping: true,
                 do_latency: true,
+                reasoning_effort: self.config.reasoning_effort.clone(),
             };
             let permit = Arc::clone(&semaphore);
             handles.push(tokio::spawn(async move {

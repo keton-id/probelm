@@ -171,6 +171,7 @@ impl App {
             timeout_secs: 15,
             do_ping: true,
             do_latency: true,
+            reasoning_effort: self.config.reasoning_effort.clone(),
         };
 
         match probe_one(&model_id, &opts).await {
@@ -247,6 +248,7 @@ mod tests {
             max_tokens: 64,
             temperature: 0.0,
             timeout_secs: 10,
+            reasoning_effort: None,
             config_path: None,
         };
         let discovered = vec![ModelEntry {

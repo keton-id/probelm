@@ -13,6 +13,7 @@ pub struct Config {
     pub max_tokens: u32,
     pub temperature: f64,
     pub timeout_secs: u64,
+    pub reasoning_effort: Option<String>,
     #[allow(dead_code)]
     pub config_path: Option<PathBuf>,
 }
@@ -34,6 +35,8 @@ pub struct FileConfig {
     pub temperature: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timeout_seconds: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_effort: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -110,6 +113,7 @@ impl Config {
             max_tokens: file.max_tokens.unwrap_or(64),
             temperature: file.temperature.unwrap_or(0.0),
             timeout_secs: file.timeout_seconds.unwrap_or(120),
+            reasoning_effort: file.reasoning_effort,
             config_path: resolved,
         })
     }
