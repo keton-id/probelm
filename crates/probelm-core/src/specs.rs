@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use crate::models::Capabilities;
+pub use probelm_proto::{normalize_model_name, Capabilities};
 
 /// Authoritative specification for a known model.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -16,36 +16,6 @@ pub struct ModelSpec {
     pub pdf: Option<bool>,
     pub audio: Option<bool>,
     pub video: Option<bool>,
-}
-
-/// Normalize model ID by stripping vendor/gateway prefixes.
-pub fn normalize_model_name(id: &str) -> String {
-    let clean = id.trim().to_lowercase();
-    // Common prefixes from 9router / aggregators
-    for prefix in &[
-        "midas/",
-        "cx/",
-        "combo/",
-        "openai/",
-        "anthropic/",
-        "deepseek/",
-        "z-ai/",
-        "zai-org/",
-        "zai/",
-        "google/",
-        "meta-llama/",
-        "qwen/",
-        "moonshotai/",
-        "minimax/",
-        "hpc-ai/",
-        "azure_ai/",
-        "bedrock/",
-    ] {
-        if let Some(stripped) = clean.strip_prefix(prefix) {
-            return stripped.to_string();
-        }
-    }
-    clean
 }
 
 /// Curated Source of Truth for flagship and standard models.
@@ -79,7 +49,7 @@ static BUILTIN_SPECS: &[(&str, u64, u64, bool, bool, bool)] = &[
     ("gemma-4-26b-a4b-it", 128_000, 64_000, false, true, true),
 ];
 
-fn get_cache_path() -> Option<PathBuf> {
+fn default_cache_path() -> Option<PathBuf> {
     std::env::var_os("HOME").map(|h| {
         Path::new(&h)
             .join(".config")
@@ -89,25 +59,34 @@ fn get_cache_path() -> Option<PathBuf> {
 }
 
 /// Load cached specifications from disk if present.
-fn load_cached_specs() -> HashMap<String, ModelSpec> {
-    if let Some(path) = get_cache_path() {
-        if path.exists() {
-            if let Ok(content) = std::fs::read_to_string(&path) {
-                if let Ok(map) = serde_json::from_str::<HashMap<String, ModelSpec>>(&content) {
-                    return map;
-                }
-            }
-        }
+///
+/// When `cache_path` is `None`, uses the default `$HOME/.config/probelm/specs-cache.json`.
+fn load_cached_specs(cache_path: Option<&Path>) -> HashMap<String, ModelSpec> {
+    let default = default_cache_path();
+    let path = cache_path.or(default.as_deref());
+    let Some(path) = path else {
+        return HashMap::new();
+    };
+    if !path.exists() {
+        return HashMap::new();
     }
-    HashMap::new()
+    let Ok(content) = std::fs::read_to_string(path) else {
+        return HashMap::new();
+    };
+    serde_json::from_str(&content).unwrap_or_default()
 }
 
 /// Look up authoritative specification for a given model ID.
 pub fn lookup_spec(model_id: &str) -> Option<ModelSpec> {
+    lookup_spec_with_cache(model_id, None)
+}
+
+/// Look up authoritative specification, optionally using a custom cache file.
+pub fn lookup_spec_with_cache(model_id: &str, cache_path: Option<&Path>) -> Option<ModelSpec> {
     let norm = normalize_model_name(model_id);
 
     // 1. Check cached remote database
-    let cache = load_cached_specs();
+    let cache = load_cached_specs(cache_path);
     if let Some(spec) = cache.get(&norm) {
         return Some(spec.clone());
     }
@@ -136,7 +115,6 @@ pub fn lookup_spec(model_id: &str) -> Option<ModelSpec> {
 pub fn enrich_capabilities(model_id: &str, mut caps: Capabilities) -> Capabilities {
     if let Some(spec) = lookup_spec(model_id) {
         if let Some(ctx) = spec.context_window {
-            // If gateway reported 0 or fallback 200k for models that are actually 1M+, use authoritative
             if caps.contextWindow.unwrap_or(0) < ctx {
                 caps.contextWindow = Some(ctx);
             }
@@ -159,8 +137,28 @@ pub fn enrich_capabilities(model_id: &str, mut caps: Capabilities) -> Capabiliti
     caps
 }
 
+/// Context for spec synchronization, including the target cache path and user agent.
+pub struct SyncContext {
+    pub cache_path: PathBuf,
+    pub user_agent: String,
+}
+
+impl Default for SyncContext {
+    fn default() -> Self {
+        Self {
+            cache_path: default_cache_path().unwrap_or_else(|| PathBuf::from("specs-cache.json")),
+            user_agent: format!("probelm/{}", env!("CARGO_PKG_VERSION")),
+        }
+    }
+}
+
 /// Download authoritative model specification database from LiteLLM community source.
 pub async fn sync_remote_specs() -> Result<usize, String> {
+    sync_remote_specs_with(&SyncContext::default()).await
+}
+
+/// Download authoritative model specification database with explicit context.
+pub async fn sync_remote_specs_with(ctx: &SyncContext) -> Result<usize, String> {
     let url = "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json";
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(15))
@@ -169,7 +167,7 @@ pub async fn sync_remote_specs() -> Result<usize, String> {
 
     let resp = client
         .get(url)
-        .header("User-Agent", "probelm/0.1.0")
+        .header("User-Agent", &ctx.user_agent)
         .send()
         .await
         .map_err(|e| format!("GET {url}: {e}"))?;
@@ -219,15 +217,13 @@ pub async fn sync_remote_specs() -> Result<usize, String> {
     }
 
     let count = spec_map.len();
-    if let Some(cache_path) = get_cache_path() {
-        if let Some(parent) = cache_path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        let json_str =
-            serde_json::to_string_pretty(&spec_map).map_err(|e| format!("Serialize error: {e}"))?;
-        std::fs::write(&cache_path, json_str)
-            .map_err(|e| format!("Write {}: {e}", cache_path.display()))?;
+    if let Some(parent) = ctx.cache_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
     }
+    let json_str =
+        serde_json::to_string_pretty(&spec_map).map_err(|e| format!("Serialize error: {e}"))?;
+    std::fs::write(&ctx.cache_path, json_str)
+        .map_err(|e| format!("Write {}: {e}", ctx.cache_path.display()))?;
 
     Ok(count)
 }

@@ -1,17 +1,19 @@
 [package]
 name = "probelm-adap"
-version = "1.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 description = "Provider adapters and connectors for probelm"
-license = "MIT"
-repository = "https://github.com/keton-id/probelm"
-homepage = "https://github.com/keton-id/probelm"
-readme = "README.md"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "../../README.md"
 keywords = ["llm", "adapter", "openai", "oauth"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]
-probelm-core = { version = "1.1.0", path = "../probelm-core" }
-tokio = { version = "1", features = ["full"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+probelm-proto.workspace = true
+probelm-core.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true

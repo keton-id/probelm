@@ -14,7 +14,6 @@ pub struct Config {
     pub temperature: f64,
     pub timeout_secs: u64,
     pub reasoning_effort: Option<String>,
-    #[allow(dead_code)]
     pub config_path: Option<PathBuf>,
 }
 
@@ -46,9 +45,30 @@ pub struct EndpointCfg {
     pub api_key: Option<String>,
 }
 
-impl Config {
-    /// Resolve path looking in given path, and fallback to ~/.config/probelm/config.json if default.
-    pub fn resolve_path(path: &str) -> Option<PathBuf> {
+/// Configuration loader with explicit filesystem and environment dependencies.
+///
+/// This separates the CLI/process layer (which reads env/HOME) from the
+/// library core. Library consumers can build a `Config` directly from
+/// [`FileConfig`] without ever touching `std::env` or the real filesystem.
+#[derive(Debug, Clone)]
+pub struct ConfigLoader {
+    pub env_url: Option<String>,
+    pub env_key: Option<String>,
+    pub default_url: Option<String>,
+    pub require_api_key: bool,
+    pub read_file: fn(&Path) -> Result<String, std::io::Error>,
+    pub resolve_path: fn(&str) -> Option<PathBuf>,
+}
+
+impl ConfigLoader {
+    /// Create a loader that resolves files relative to the current directory and
+    /// `~/.config/probelm/config.json`, and reads environment variables.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Resolve the canonical candidate path for a config file argument.
+    pub fn resolve_path_default(path: &str) -> Option<PathBuf> {
         let p = Path::new(path);
         if p.exists() {
             return Some(p.to_path_buf());
@@ -67,38 +87,40 @@ impl Config {
         None
     }
 
-    /// Load from a JSON file (optional) merged with env overrides.
-    /// Returns defaults when the file does not exist.
-    pub fn load(path: &str) -> Result<Config, String> {
-        let resolved = Self::resolve_path(path);
+    /// Load a config from a path string, falling back to defaults when the file is missing.
+    pub fn load(&self, path: &str) -> Result<Config, String> {
+        let resolved = (self.resolve_path)(path).or_else(|| Self::resolve_path_default(path));
         let file = if let Some(p) = &resolved {
             let raw =
-                std::fs::read_to_string(p).map_err(|e| format!("read {}: {e}", p.display()))?;
+                (self.read_file)(p.as_path()).map_err(|e| format!("read {}: {e}", p.display()))?;
             serde_json::from_str::<FileConfig>(&raw)
                 .map_err(|e| format!("parse {}: {e}", p.display()))?
         } else if Path::new(path).exists() {
-            let raw = std::fs::read_to_string(path).map_err(|e| format!("read {path}: {e}"))?;
+            let raw = (self.read_file)(Path::new(path)).map_err(|e| format!("read {path}: {e}"))?;
             serde_json::from_str::<FileConfig>(&raw).map_err(|e| format!("parse {path}: {e}"))?
         } else {
             FileConfig::default()
         };
 
-        let env_url = std::env::var("ROUTER_URL").ok();
-        let env_key = std::env::var("ROUTER_KEY").ok();
-
-        let base_url = env_url
+        let base_url = self
+            .env_url
+            .clone()
             .or(file.endpoint.as_ref().and_then(|e| e.base_url.clone()))
+            .or(self.default_url.clone())
             .unwrap_or_else(|| "http://localhost:20128".to_string())
             .trim_end_matches('/')
             .to_string();
 
-        let api_key = env_key
+        let api_key = self
+            .env_key
+            .clone()
             .or(file.endpoint.as_ref().and_then(|e| e.api_key.clone()))
             .unwrap_or_default();
 
-        if api_key.is_empty() {
+        if self.require_api_key && api_key.is_empty() {
             return Err(
-                "No API key configured.\n  Run 'probelm init' to generate config.json, or export ROUTER_KEY=<key>.".to_string()
+                "No API key configured.\n  Run 'probelm init' to generate config.json, or export ROUTER_KEY=<key>."
+                .to_string()
             );
         }
 
@@ -119,7 +141,55 @@ impl Config {
     }
 }
 
-/// Helper to detect local 9router API key from sqlite database or env
+impl Default for ConfigLoader {
+    fn default() -> Self {
+        Self {
+            env_url: std::env::var("ROUTER_URL").ok(),
+            env_key: std::env::var("ROUTER_KEY").ok(),
+            default_url: None,
+            require_api_key: true,
+            read_file: |p| std::fs::read_to_string(p),
+            resolve_path: |p| Self::resolve_path_default(p),
+        }
+    }
+}
+
+impl Config {
+    /// Load config using the default loader.
+    pub fn load(path: &str) -> Result<Config, String> {
+        ConfigLoader::new().load(path)
+    }
+
+    /// Create a config directly from a file config. Useful for tests and harnesses.
+    pub fn from_file_config(file: FileConfig, config_path: Option<PathBuf>) -> Self {
+        Self {
+            base_url: file
+                .endpoint
+                .as_ref()
+                .and_then(|e| e.base_url.clone())
+                .unwrap_or_else(|| "http://localhost:20128".to_string())
+                .trim_end_matches('/')
+                .to_string(),
+            api_key: file
+                .endpoint
+                .as_ref()
+                .and_then(|e| e.api_key.clone())
+                .unwrap_or_default(),
+            models: file.models.unwrap_or_default(),
+            default_prompt: file
+                .default_prompt
+                .unwrap_or_else(|| "Reply with exactly: OK".to_string()),
+            prompts: file.prompts.unwrap_or_default(),
+            max_tokens: file.max_tokens.unwrap_or(64),
+            temperature: file.temperature.unwrap_or(0.0),
+            timeout_secs: file.timeout_seconds.unwrap_or(120),
+            reasoning_effort: file.reasoning_effort,
+            config_path,
+        }
+    }
+}
+
+/// Helper to detect local 9router API key from sqlite database or env.
 pub fn detect_local_9router_key() -> Option<String> {
     if let Ok(k) = std::env::var("ROUTER_KEY") {
         if !k.is_empty() {
@@ -133,7 +203,6 @@ pub fn detect_local_9router_key() -> Option<String> {
             .join("db")
             .join("data.sqlite");
         if db_path.exists() {
-            // Try sqlite3 command
             if let Ok(output) = std::process::Command::new("sqlite3")
                 .arg(&db_path)
                 .arg("SELECT key FROM apiKeys WHERE isActive=1 LIMIT 1;")
@@ -147,10 +216,8 @@ pub fn detect_local_9router_key() -> Option<String> {
                 }
             }
 
-            // Fallback: search key pattern in file if sqlite3 command is not available
             if let Ok(bytes) = std::fs::read(&db_path) {
                 let content = String::from_utf8_lossy(&bytes);
-                // 9router keys typically start with "sk-" followed by hex
                 if let Some(idx) = content.find("sk-") {
                     let slice = &content[idx..];
                     let end = slice

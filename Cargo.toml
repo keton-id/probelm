@@ -2,8 +2,33 @@
 members = [
     "crates/probelm",
     "crates/probelm-core",
+    "crates/probelm-proto",
     "crates/probelm-adap",
     "crates/probelm-tui",
 ]
 resolver = "2"
 default-members = ["crates/probelm"]
+
+[workspace.package]
+version = "1.1.0"
+edition = "2021"
+rust-version = "1.82"
+license = "MIT"
+repository = "https://github.com/keton-id/probelm"
+homepage = "https://github.com/keton-id/probelm"
+
+[workspace.dependencies]
+# Internal crates use workspace version.
+probelm-proto = { path = "crates/probelm-proto", version = "1.1.0" }
+probelm-core = { path = "crates/probelm-core", version = "1.1.0" }
+probelm-adap = { path = "crates/probelm-adap", version = "1.1.0" }
+probelm-tui = { path = "crates/probelm-tui", version = "1.1.0" }
+
+# Shared third-party dependencies.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+futures-util = "0.3"
+schemars = "1"
+thiserror = "1"

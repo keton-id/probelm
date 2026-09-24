@@ -1,5 +1,7 @@
+pub mod describe;
 pub mod mcp;
 pub mod tty;
+pub mod watch;
 
 // Re-exports from workspace crates
 pub use probelm_adap as adap;
@@ -11,6 +13,7 @@ pub use probelm_core::config;
 pub use probelm_core::models;
 pub use probelm_core::probe;
 pub use probelm_core::specs;
+pub use probelm_proto::{ProbeError, ProbeOpts, ProbeResult, ProbeState};
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -52,6 +55,12 @@ enum Command {
     /// Interactive full-screen TUI dashboard to explore, benchmark, and manage models.
     #[command(alias = "manage", alias = "dashboard")]
     Tui(TuiArgs),
+    /// Periodically probe models, writing durable state + NDJSON transitions.
+    #[command(alias = "monitor", alias = "pulse")]
+    Watch(watch::WatchArgs),
+    /// Print a machine-readable integration manifest (state + event contracts).
+    #[command(alias = "manifest")]
+    Describe,
     /// Single-update TTY wizard or quick configuration adjustment.
     Config(ConfigArgs),
 }
@@ -172,6 +181,10 @@ enum McpCommand {
         /// JSON config file.
         #[arg(short, long, default_value = "config.json")]
         config: String,
+        /// Path of the `probelm watch` state file exposed as the
+        /// `probelm://state` resource (default: state.json).
+        #[arg(long, default_value = "state.json")]
+        state: std::path::PathBuf,
     },
     /// Register the stdio server with an agent harness.
     Install {
@@ -229,10 +242,12 @@ async fn main() {
         Some(Command::SyncSpecs) => cmd_sync_specs().await,
         Some(Command::Mcp(args)) => cmd_mcp(args).await,
         Some(Command::Tui(a)) => cmd_tui(a).await,
+        Some(Command::Watch(a)) => watch::cmd_watch(a).await,
+        Some(Command::Describe) => describe::cmd_describe(),
         Some(Command::Config(a)) => cmd_config(a),
         None => {
             eprintln!(
-                "usage: probelm <init|test|list|sync-specs|mcp|tui|config> [options] — see --help"
+                "usage: probelm <init|test|list|sync-specs|mcp|tui|watch|describe|config> [options] — see --help"
             );
             eprintln!("aliases for 'test': probe, check, bench, run");
             eprintln!("aliases for 'tui': manage, dashboard");
@@ -334,7 +349,7 @@ fn cmd_config(args: &ConfigArgs) -> i32 {
 
 async fn cmd_mcp(args: &McpArgs) -> i32 {
     match &args.command {
-        McpCommand::Serve { config } => {
+        McpCommand::Serve { config, state } => {
             let config = match config::Config::load(config) {
                 Ok(config) => config,
                 Err(error) => {
@@ -342,7 +357,10 @@ async fn cmd_mcp(args: &McpArgs) -> i32 {
                     return 2;
                 }
             };
-            match mcp::ProbelmServer::new(config).serve_stdio().await {
+            match mcp::ProbelmServer::new(config, state.clone())
+                .serve_stdio()
+                .await
+            {
                 Ok(()) => 0,
                 Err(error) => {
                     eprintln!("ERROR: MCP server: {error}");
@@ -822,7 +840,7 @@ async fn cmd_test(args: &TestArgs) -> i32 {
     let targets = Arc::new(targets);
     let cfg2 = Arc::clone(&cfg);
     let custom_prompt = args.prompt.clone();
-    let opts = probe::ProbeOpts {
+    let opts = ProbeOpts {
         base_url: cfg.base_url.clone(),
         api_key: cfg.api_key.clone(),
         prompt: String::new(),
@@ -838,7 +856,7 @@ async fn cmd_test(args: &TestArgs) -> i32 {
     };
 
     // Concurrency
-    let results: Vec<probe::ProbeResult> = if args.jobs <= 1 {
+    let results: Vec<ProbeResult> = if args.jobs <= 1 {
         let mut v = Vec::new();
         for m in targets.iter() {
             let prompt = custom_prompt
@@ -847,16 +865,11 @@ async fn cmd_test(args: &TestArgs) -> i32 {
                 .unwrap_or_else(|| cfg2.default_prompt.clone());
             let mut o = opts.clone();
             o.prompt = prompt;
-            match probe::probe_one(m, &o).await {
-                Ok(r) => v.push(r),
-                Err(e) => {
-                    eprintln!("ERROR: {m}: {e}");
-                    v.push(probe::ProbeResult {
-                        model: m.clone(),
-                        ..Default::default()
-                    });
-                }
+            let r = probe::probe_one(m, &o).await;
+            if let Some(err) = &r.state_error {
+                eprintln!("ERROR: {m}: {err}");
             }
+            v.push(r);
         }
         v
     } else {
@@ -874,13 +887,11 @@ async fn cmd_test(args: &TestArgs) -> i32 {
             let sem = Arc::clone(&semaphore);
             handles.push(tokio::spawn(async move {
                 let _p = sem.acquire().await.unwrap();
-                probe::probe_one(&m, &o).await.unwrap_or_else(|e| {
-                    eprintln!("ERROR: {m}: {e}");
-                    probe::ProbeResult {
-                        model: m,
-                        ..Default::default()
-                    }
-                })
+                let r = probe::probe_one(&m, &o).await;
+                if let Some(err) = &r.state_error {
+                    eprintln!("ERROR: {m}: {err}");
+                }
+                r
             }));
         }
         let mut v = Vec::new();
@@ -970,11 +981,7 @@ pub fn matches_pattern(pattern: &str, text: &str) -> bool {
     true
 }
 
-fn compare_probe_result(
-    a: &probe::ProbeResult,
-    b: &probe::ProbeResult,
-    key: &str,
-) -> std::cmp::Ordering {
+fn compare_probe_result(a: &ProbeResult, b: &ProbeResult, key: &str) -> std::cmp::Ordering {
     let key_lower = key.to_lowercase();
     let (field, is_desc) = if let Some(stripped) = key_lower.strip_suffix(":asc") {
         (stripped, false)
@@ -1085,7 +1092,7 @@ fn pad_visual(s: &str, target_width: usize) -> String {
     }
 }
 
-fn print_table(results: &[probe::ProbeResult], _do_ping: bool, _do_latency: bool, do_caps: bool) {
+fn print_table(results: &[ProbeResult], _do_ping: bool, _do_latency: bool, do_caps: bool) {
     if do_caps {
         println!(
             "{}{:<36} {:<5} {:>8} {:>8} {:>7}  {:<12} {:>6} {:>6}{}",
@@ -1183,7 +1190,7 @@ fn print_table(results: &[probe::ProbeResult], _do_ping: bool, _do_latency: bool
     }
 }
 
-fn print_markdown_table(results: &[probe::ProbeResult], do_caps: bool) {
+fn print_markdown_table(results: &[ProbeResult], do_caps: bool) {
     if do_caps {
         println!("| Model | Ping | TTFT (s) | Total (s) | Tok/s | Caps | Context | Max Out |");
         println!("| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |");

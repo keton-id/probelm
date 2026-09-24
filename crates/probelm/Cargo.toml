@@ -1,11 +1,12 @@
 [package]
 name = "probelm"
-version = "1.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 description = "Probe and benchmark models on an OpenAI-compatible gateway: ping, latency, throughput, caps"
-license = "MIT"
-repository = "https://github.com/keton-id/probelm"
-homepage = "https://github.com/keton-id/probelm"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 readme = "../../README.md"
 keywords = ["llm", "benchmark", "probe", "openai", "cli"]
 categories = ["command-line-utilities", "development-tools"]
@@ -20,16 +21,17 @@ name = "mtest"
 path = "src/main.rs"
 
 [dependencies]
-probelm-core = { version = "1.1.0", path = "../probelm-core" }
-probelm-adap = { version = "1.1.0", path = "../probelm-adap" }
-probelm-tui = { version = "1.1.0", path = "../probelm-tui" }
-tokio = { version = "1", features = ["full"] }
-reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls"], default-features = false }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+probelm-proto.workspace = true
+probelm-core.workspace = true
+probelm-adap.workspace = true
+probelm-tui.workspace = true
+tokio.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+futures-util.workspace = true
+schemars.workspace = true
 clap = { version = "4", features = ["derive"] }
-futures-util = "0.3"
-kurir = "0.2"
 inquire = "0.9"
+kurir = "0.2"
 rmcp = { version = "3.4", default-features = false, features = ["macros", "schemars", "server", "transport-io"] }
-schemars = "1"

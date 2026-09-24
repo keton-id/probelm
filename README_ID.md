@@ -79,12 +79,15 @@ probelm init [options]
 probelm list [options]
 probelm test [models] [options]
 probelm sync-specs
+probelm watch [models] [options]
+probelm describe
 probelm tui [options]
 probelm config [options]
 ```
 
 `test` juga menerima alias `probe`, `check`, `bench`, dan `run`.
 `tui` juga menerima alias `manage` dan `dashboard`.
+`watch` juga menerima alias `monitor` dan `pulse`.
 
 ## MCP untuk harness
 

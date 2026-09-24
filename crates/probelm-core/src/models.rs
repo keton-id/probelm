@@ -1,135 +1,13 @@
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+pub use probelm_proto::{normalize_model_name, Capabilities, ModelEntry};
+
+use serde::Deserialize;
 use serde_json::Value;
 
-/// One entry from `GET /v1/models`.
-#[derive(Debug, Clone, Deserialize)]
-#[allow(dead_code)]
-pub struct ModelEntry {
-    pub id: String,
-    pub object: Option<String>,
-    pub owned_by: Option<String>,
-    #[serde(default)]
-    pub capabilities: Capabilities,
-}
+use crate::specs::enrich_capabilities;
 
-#[derive(Debug, Clone, Default, Deserialize, JsonSchema, Serialize)]
-#[allow(non_snake_case)]
-pub struct Capabilities {
-    pub vision: bool,
-    #[serde(default)]
-    pub pdf: bool,
-    #[serde(default)]
-    pub search: bool,
-    #[serde(default)]
-    pub tools: bool,
-    #[serde(default)]
-    pub audioInput: bool,
-    #[serde(default)]
-    pub audioOutput: bool,
-    #[serde(default)]
-    pub videoInput: bool,
-    #[serde(default)]
-    pub imageOutput: bool,
-    #[serde(default)]
-    pub reasoning: bool,
-    pub thinkingFormat: Option<String>,
-    pub contextWindow: Option<u64>,
-    pub maxOutput: Option<u64>,
-}
-
-impl Capabilities {
-    /// Format token counts to human-readable k/m notation (e.g. 200k, 1m).
-    pub fn format_tokens(n: Option<u64>) -> String {
-        match n {
-            None => "-".to_string(),
-            Some(0) => "-".to_string(),
-            Some(v) => {
-                if v >= 1_000_000 {
-                    let m = v as f64 / 1_000_000.0;
-                    if m.fract().abs() < 0.05 {
-                        format!("{:.0}m", m)
-                    } else {
-                        format!("{:.1}m", m)
-                    }
-                } else if v >= 1_000 {
-                    let k = (v as f64 / 1_000.0).round() as u64;
-                    format!("{k}k")
-                } else {
-                    format!("{v}")
-                }
-            }
-        }
-    }
-
-    /// Extract icons representing active capabilities.
-    pub fn icons(&self) -> String {
-        let mut list = Vec::new();
-        if self.reasoning {
-            list.push("🧠");
-        }
-        if self.vision {
-            list.push("👁");
-        }
-        if self.tools {
-            list.push("🛠");
-        }
-        if self.pdf {
-            list.push("📄");
-        }
-        if self.search {
-            list.push("🔍");
-        }
-        if self.audioInput || self.audioOutput {
-            list.push("🎙");
-        }
-        if self.videoInput {
-            list.push("🎬");
-        }
-        if self.imageOutput {
-            list.push("🎨");
-        }
-        if list.is_empty() {
-            "-".to_string()
-        } else {
-            list.join(" ")
-        }
-    }
-
-    /// Compact single-line representation used in the table.
-    #[allow(dead_code)]
-    pub fn compact(&self) -> String {
-        let icons = self.icons();
-        let ctx = Self::format_tokens(self.contextWindow);
-        let out = Self::format_tokens(self.maxOutput);
-        format!("{icons} ctx:{ctx} out:{out}")
-    }
-
-    /// Capability names present (lowercase), for `--cap` filtering.
-    pub fn names(&self) -> Vec<String> {
-        let mut v = Vec::new();
-        for (name, on) in [
-            ("vision", self.vision),
-            ("pdf", self.pdf),
-            ("search", self.search),
-            ("tools", self.tools),
-            ("audio", self.audioInput || self.audioOutput),
-            ("video", self.videoInput),
-            ("image", self.imageOutput),
-            ("reasoning", self.reasoning),
-        ] {
-            if on {
-                v.push(name.to_string());
-            }
-        }
-        v
-    }
-}
-
-/// Raw response from `GET /v1/models`.
 #[derive(Deserialize)]
-pub struct ModelsResponse {
-    pub data: Vec<ModelEntry>,
+struct ModelsResponse {
+    data: Vec<ModelEntry>,
 }
 
 /// Fetch all models from the gateway.
@@ -160,7 +38,7 @@ pub async fn fetch_models(
         serde_json::from_str(&text).map_err(|e| format!("parse models: {e}"))?;
     let mut data = parsed.data;
     for m in &mut data {
-        m.capabilities = crate::specs::enrich_capabilities(&m.id, m.capabilities.clone());
+        m.capabilities = enrich_capabilities(&m.id, m.capabilities.clone());
     }
     Ok(data)
 }
@@ -178,7 +56,7 @@ pub fn export_json(entries: &[ModelEntry], base_url: &str) -> Value {
             .push(Value::String(m.id.clone()));
     }
     let models: Vec<String> = entries.iter().map(|m| m.id.clone()).collect();
-    let now = chrono_now();
+    let now = rfc3339_now();
     serde_json::json!({
         "baseUrl": base_url,
         "exportedAt": now,
@@ -188,13 +66,11 @@ pub fn export_json(entries: &[ModelEntry], base_url: &str) -> Value {
     })
 }
 
-fn chrono_now() -> String {
+fn rfc3339_now() -> String {
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    // naive civil date from epoch (no chrono dependency)
-    // days-from-epoch via Howard Hinnant's algorithm
     let z = (secs / 86400) as i64;
     let s = secs % 86400;
     let (hh, m) = (s / 3600, s % 3600);

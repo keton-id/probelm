@@ -1,0 +1,22 @@
+[package]
+name = "probelm-proto"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Pure data types and helpers for probelm: zero runtime, zero async/HTTP"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "../../README.md"
+keywords = ["llm", "probe", "openai", "types"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+schemars = { version = "1", optional = true }
+thiserror.workspace = true
+
+[features]
+default = []
+schema = ["dep:schemars"]

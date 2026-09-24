@@ -1505,6 +1505,7 @@ dependencies = [
  "kurir",
  "probelm-adap",
  "probelm-core",
+ "probelm-proto",
  "probelm-tui",
  "reqwest",
  "rmcp",
@@ -1519,6 +1520,7 @@ name = "probelm-adap"
 version = "1.1.0"
 dependencies = [
  "probelm-core",
+ "probelm-proto",
  "serde",
  "serde_json",
  "tokio",
@@ -1529,11 +1531,23 @@ name = "probelm-core"
 version = "1.1.0"
 dependencies = [
  "futures-util",
+ "probelm-proto",
  "reqwest",
  "schemars",
  "serde",
  "serde_json",
+ "thiserror 1.0.69",
  "tokio",
+]
+
+[[package]]
+name = "probelm-proto"
+version = "1.1.0"
+dependencies = [
+ "schemars",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -1543,6 +1557,7 @@ dependencies = [
  "crossterm",
  "probelm-adap",
  "probelm-core",
+ "probelm-proto",
  "ratatui",
  "serde",
  "serde_json",
