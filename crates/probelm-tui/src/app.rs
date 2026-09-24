@@ -1,7 +1,8 @@
 use probelm_adap::oauth::{scan_local_oauth_providers, DetectedOAuthSession};
 use probelm_core::config::{Config, FileConfig};
 use probelm_core::models::ModelEntry;
-use probelm_core::probe::{probe_one, ProbeOpts, ProbeResult};
+use probelm_core::probe_one;
+use probelm_proto::{ProbeOpts, ProbeResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
@@ -174,28 +175,24 @@ impl App {
             reasoning_effort: self.config.reasoning_effort.clone(),
         };
 
-        match probe_one(&model_id, &opts).await {
-            Ok(res) => {
-                let ping_status = res
-                    .ping
-                    .as_ref()
-                    .map(|p| if p.ok { "200 OK" } else { "FAILED" })
-                    .unwrap_or("N/A");
-                let rate = res
-                    .latency
-                    .as_ref()
-                    .and_then(|l| l.rate_per_sec)
-                    .map(|r| format!("{:.1} tok/s", r))
-                    .unwrap_or_else(|| "-".to_string());
-                self.status_message =
-                    format!("✓ Probed '{model_id}': ping={ping_status}, speed={rate}");
-                if let Some(m) = self.models.iter_mut().find(|m| m.id == model_id) {
-                    m.last_probe = Some(res);
-                }
-            }
-            Err(e) => {
-                self.status_message = format!("❌ Probe failed for '{model_id}': {e}");
-            }
+        let res = probe_one(&model_id, &opts).await;
+        let ping_status = res
+            .ping
+            .as_ref()
+            .map(|p| if p.ok { "200 OK" } else { "FAILED" })
+            .unwrap_or("N/A");
+        let rate = res
+            .latency
+            .as_ref()
+            .and_then(|l| l.rate_per_sec)
+            .map(|r| format!("{:.1} tok/s", r))
+            .unwrap_or_else(|| "-".to_string());
+        self.status_message = format!("✓ Probed '{model_id}': ping={ping_status}, speed={rate}");
+        if let Some(m) = self.models.iter_mut().find(|m| m.id == model_id) {
+            m.last_probe = Some(res.clone());
+        }
+        if let Some(err) = res.state_error {
+            self.status_message = format!("❌ Probe failed for '{model_id}': {err}");
         }
 
         self.is_probing = false;

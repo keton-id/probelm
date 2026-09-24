@@ -1,6 +1,7 @@
 use crate::{AdapterKind, AuthDetails, ProviderAdapter};
 use probelm_core::models::{fetch_models, ModelEntry};
-use probelm_core::probe::{probe_one, ProbeOpts, ProbeResult};
+use probelm_core::probe_one;
+use probelm_proto::{ProbeOpts, ProbeResult};
 
 /// Adapter for standard OpenAI-compatible gateways (e.g. 9Router, vLLM, LiteLLM, or direct OpenAI).
 #[derive(Debug, Clone)]
@@ -21,7 +22,7 @@ impl OpenAiAdapter {
         fetch_models(&self.base_url, &self.api_key, timeout_secs).await
     }
 
-    pub async fn probe(&self, model: &str, opts: &ProbeOpts) -> Result<ProbeResult, String> {
+    pub async fn probe(&self, model: &str, opts: &ProbeOpts) -> ProbeResult {
         let mut probe_opts = opts.clone();
         probe_opts.base_url = self.base_url.clone();
         probe_opts.api_key = self.api_key.clone();

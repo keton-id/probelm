@@ -79,12 +79,45 @@ probelm init [options]
 probelm list [options]
 probelm test [models] [options]
 probelm sync-specs
+probelm watch [models] [options]
+probelm describe
 probelm tui [options]
 probelm config [options]
+probelm mcp serve|install
 ```
 
 `test` also accepts the aliases `probe`, `check`, `bench`, and `run`.
 `tui` also accepts the aliases `manage` and `dashboard`.
+`watch` also accepts the aliases `monitor` and `pulse`.
+
+### Watch models continuously
+
+`probelm watch` probes models on a fixed interval and writes a durable,
+machine-readable snapshot every cycle, for harnesses that route on model
+health:
+
+```bash
+probelm watch --config config.json --interval 30 --state state.json
+```
+
+- **`state.json`** — full view of every probed model, rewritten atomically
+  (temp file + rename) each cycle. Schema `StateFile` (version 1) with one
+  `ProbeSnapshot` per model: `model`, `state` (`unknown|healthy|degraded|unreachable`),
+  `ping`, `latency`, optional `error`, and `updated_at_unix`.
+- **stdout** — one NDJSON line per state *transition* only:
+  `{"event":"transition","model":...,"from":...,"to":...,"snapshot":{...}}`.
+  Silent cycles stay silent; late readers use `state.json`.
+- **shutdown** — SIGINT/SIGTERM writes a final state file and exits cleanly.
+
+### Integration manifest
+
+`probelm describe` prints the machine-readable integration contract —
+watch subprocess invocation, state schema, NDJSON events, and MCP surface —
+so a harness can drive `probelm` without hard-coding assumptions:
+
+```bash
+probelm describe
+```
 
 ## MCP for harnesses
 
@@ -107,6 +140,10 @@ The interactive installer requires a real TTY so it can present the harness
 selection menu. Pass `--client` in automation. Registration writes a stdio
 entry that launches `probelm mcp serve`; the server reads the same gateway
 configuration used by the CLI and keeps protocol output on stdout.
+
+The server exposes `list_models`, `probe_models`, and `sync_specs` tools plus
+a `probelm://state` resource mirroring the `probelm watch` `state.json`
+(`probelm mcp serve --state <path>` selects which file).
 
 ### Initialize configuration
 

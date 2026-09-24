@@ -24,17 +24,23 @@ use crate::{
     probe::{self, ProbeOpts, ProbeResult},
 };
 
+/// URI of the state resource exposed over MCP. Reads the latest `state.json`
+/// written by `probelm watch` (same schema as the watch `--state` file).
+pub const STATE_RESOURCE_URI: &str = "probelm://state";
+
 #[derive(Clone)]
 pub struct ProbelmServer {
     tool_router: rmcp::handler::server::router::tool::ToolRouter<Self>,
     config: Config,
+    state_path: std::path::PathBuf,
 }
 
 impl ProbelmServer {
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: Config, state_path: std::path::PathBuf) -> Self {
         Self {
             tool_router: Self::tool_router(),
             config,
+            state_path,
         }
     }
 
@@ -193,12 +199,15 @@ impl ProbelmServer {
         };
         for handle in handles {
             let (model, result) = handle.await.map_err(|error| error.to_string())??;
-            match result {
-                Ok(mut result) => {
-                    result.caps = capabilities.get(&model).cloned();
-                    response.results.push(result);
-                }
-                Err(error) => response.failures.push(ProbeFailure { model, error }),
+            let mut result = result;
+            if let Some(error) = result.state_error.take() {
+                response.failures.push(ProbeFailure {
+                    model,
+                    error: error.to_string(),
+                });
+            } else {
+                result.caps = capabilities.get(&model).cloned();
+                response.results.push(result);
             }
         }
         Ok(Json(response))
@@ -217,8 +226,13 @@ impl ProbelmServer {
 #[rmcp::tool_handler(router = self.tool_router)]
 impl ServerHandler for ProbelmServer {
     fn get_info(&self) -> ServerConfig {
-        ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
-            .with_server_info(Implementation::new("probelm", env!("CARGO_PKG_VERSION")))
+        ServerConfig::new(
+            ServerCapabilities::builder()
+                .enable_tools()
+                .enable_resources()
+                .build(),
+        )
+        .with_server_info(Implementation::new("probelm", env!("CARGO_PKG_VERSION")))
     }
 
     async fn list_resources(
@@ -226,7 +240,34 @@ impl ServerHandler for ProbelmServer {
         _request: Option<rmcp::model::PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
     ) -> Result<rmcp::model::ListResourcesResult, McpError> {
-        Ok(Default::default())
+        use rmcp::model::{ListResourcesResult, Resource};
+        let resource = Resource::new(STATE_RESOURCE_URI, "probelm model state")
+            .with_description("Latest probe state written by `probelm watch` (StateFile schema).")
+            .with_mime_type("application/json");
+        Ok(ListResourcesResult::with_all_items(vec![resource]))
+    }
+
+    async fn read_resource(
+        &self,
+        request: rmcp::model::ReadResourceRequestParams,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<rmcp::model::ReadResourceResponse, McpError> {
+        use rmcp::model::{ReadResourceResponse, ResourceContents};
+        if request.uri != STATE_RESOURCE_URI {
+            return Err(McpError::invalid_params("unknown resource", None));
+        }
+        let raw = std::fs::read_to_string(&self.state_path).map_err(|e| {
+            McpError::resource_not_found(
+                format!("state file not readable: {e}"),
+                Some(serde_json::json!({ "uri": STATE_RESOURCE_URI })),
+            )
+        })?;
+        Ok(ReadResourceResponse::Complete(
+            rmcp::model::ReadResourceResult::new(vec![ResourceContents::text(
+                raw,
+                STATE_RESOURCE_URI,
+            )]),
+        ))
     }
 }
 
